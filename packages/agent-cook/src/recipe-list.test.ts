@@ -9,6 +9,12 @@ describe("isRecipeListRequest", () => {
     expect(isRecipeListRequest("what recipes do i have")).toBe(true);
     expect(isRecipeListRequest("show me all my recipes")).toBe(true);
     expect(isRecipeListRequest("show me the recipes")).toBe(true);
+    expect(isRecipeListRequest("what recipes have i saved")).toBe(true);
+    expect(isRecipeListRequest("see my recipes")).toBe(true);
+    expect(isRecipeListRequest("view all recipes")).toBe(true);
+    expect(isRecipeListRequest("give me my recipes")).toBe(true);
+    expect(isRecipeListRequest("what's in my recipe collection")).toBe(true);
+    expect(isRecipeListRequest("my recipe list")).toBe(true);
   });
 
   it("does not flag a specific single-recipe request", () => {
