@@ -18,6 +18,7 @@
     { "path": "packages/provider-ai-gemini" },
     { "path": "packages/channel-sms" },
     { "path": "packages/agent-switcher" },
-    { "path": "packages/legal-demo" }
+    { "path": "packages/legal-demo" },
+    { "path": "packages/ingest-mysql-pinecone" }
   ]
 }

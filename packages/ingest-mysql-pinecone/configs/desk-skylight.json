@@ -1,0 +1,212 @@
+{
+  "namespace": "desk-skylight",
+  "sources": [
+    {
+      "name": "desk-projects-overview",
+      "sql": "WITH e AS (SELECT te.project_id, te.entry_date, ps.name AS stage, ROW_NUMBER() OVER (PARTITION BY te.project_id ORDER BY te.entry_date DESC, te.id DESC) AS rn FROM gracesoft_desk_snapshot.time_entries te LEFT JOIN gracesoft_desk_snapshot.project_stages ps ON ps.id = te.project_stage_id WHERE te.deleted_at IS NULL), s AS (SELECT project_id, MAX(entry_date) AS last_entry, MAX(IF(rn = 1, stage, NULL)) AS stage, SUM(1) AS entries FROM e GROUP BY project_id), p AS (SELECT p.id, p.status, CONCAT('- ', p.name, ' (', p.code, IF(p.is_billable, '', ', non-billable'), ')', IF(s.project_id IS NULL, ': no time logged in the snapshot period', CONCAT(': current stage ', IFNULL(s.stage, 'unknown'), ', last time logged ', s.last_entry)), IF(p.status = 'active' AND p.ends_on < DATE '2026-09-10', CONCAT(', OVERDUE: planned end date ', p.ends_on, ' has passed'), '')) AS line FROM gracesoft_desk_snapshot.projects p LEFT JOIN s ON s.project_id = p.id WHERE p.deleted_at IS NULL) SELECT /*+ SET_VAR(group_concat_max_len = 1000000) */ 'all' AS id, COUNT(*) AS total, SUM(status = 'active') AS active_n, SUM(status = 'completed') AS completed_n, SUM(status = 'archived') AS archived_n, SUM(status NOT IN ('active', 'completed', 'archived')) AS other_n, GROUP_CONCAT(IF(status = 'active', line, NULL) ORDER BY id SEPARATOR '\\n') AS active_list, GROUP_CONCAT(IF(status = 'completed', line, NULL) ORDER BY id SEPARATOR '\\n') AS completed_list, GROUP_CONCAT(IF(status = 'archived', line, NULL) ORDER BY id SEPARATOR '\\n') AS archived_list, GROUP_CONCAT(IF(status NOT IN ('active', 'completed', 'archived'), CONCAT(line, ' [status: ', status, ']'), NULL) ORDER BY id SEPARATOR '\\n') AS other_list FROM p",
+      "idColumn": "id",
+      "text": [
+        "GraceSoft Desk: status of all projects (ongoing, completed and archived), as of 10 Sep 2026, the end of the snapshot",
+        "{{total}} projects in total: {{active_n}} active (ongoing), {{completed_n}} completed, {{archived_n}} archived.",
+        "Status meanings: active = ongoing work; completed = finished; archived = shelved. A project's current stage is the SDLC stage of its most recent time entry.",
+        "Active (ongoing) projects:\n{{active_list}}",
+        "Completed projects:\n{{completed_list}}",
+        "Archived projects:\n{{archived_list}}",
+        "Projects with another status:\n{{other_list}}"
+      ]
+    },
+    {
+      "name": "desk-project",
+      "sql": "WITH RECURSIVE cal AS (SELECT DATE '2026-09-10' AS d UNION ALL SELECT d - INTERVAL 1 DAY FROM cal WHERE d > DATE '2026-09-10' - INTERVAL 60 DAY), win AS (SELECT MIN(d) AS win_start, DATE '2026-09-10' AS win_end FROM (SELECT d FROM cal WHERE WEEKDAY(d) < 5 ORDER BY d DESC LIMIT 30) bd), e AS (SELECT te.id, te.project_id, te.entry_date, te.duration_minutes, te.is_billable, te.billable_amount, te.notes, IFNULL(ps.name, 'No stage') AS stage, IFNULL(ps.sort_order, 99) AS sort_order, ROW_NUMBER() OVER (PARTITION BY te.project_id ORDER BY te.entry_date DESC, te.id DESC) AS rn FROM gracesoft_desk_snapshot.time_entries te LEFT JOIN gracesoft_desk_snapshot.project_stages ps ON ps.id = te.project_stage_id WHERE te.deleted_at IS NULL), tot AS (SELECT e.project_id, COUNT(*) AS entries, MIN(e.entry_date) AS first_entry, MAX(e.entry_date) AS last_entry, SUM(e.duration_minutes) AS mins, SUM(IF(e.is_billable, e.duration_minutes, 0)) AS bmins, SUM(e.billable_amount) AS value, MAX(IF(e.rn = 1, e.stage, NULL)) AS current_stage, SUM(IF(e.entry_date BETWEEN win.win_start AND win.win_end, e.duration_minutes, 0)) AS r_mins, SUM(IF(e.entry_date BETWEEN win.win_start AND win.win_end AND e.is_billable, e.duration_minutes, 0)) AS r_bmins, SUM(IF(e.entry_date BETWEEN win.win_start AND win.win_end, e.billable_amount, 0)) AS r_value FROM e CROSS JOIN win GROUP BY e.project_id), st AS (SELECT project_id, GROUP_CONCAT(CONCAT(stage, ' ', FORMAT(mins / 60, 2), ' h') ORDER BY sort_order SEPARATOR ', ') AS by_stage FROM (SELECT project_id, stage, MIN(sort_order) AS sort_order, SUM(duration_minutes) AS mins FROM e GROUP BY project_id, stage) x GROUP BY project_id), recent AS (SELECT project_id, GROUP_CONCAT(CONCAT('- ', entry_date, ' (', stage, ', ', FORMAT(duration_minutes / 60, 2), ' h', IF(is_billable, '', ', non-billable'), '): ', IFNULL(NULLIF(TRIM(REPLACE(REPLACE(notes, '\\r', ' '), '\\n', ' ')), ''), '(no notes)')) ORDER BY entry_date DESC, id DESC SEPARATOR '\\n') AS notes FROM e WHERE rn <= 10 GROUP BY project_id) SELECT /*+ SET_VAR(group_concat_max_len = 1000000) */ p.id, p.code, p.name, p.status, p.is_billable, IF(p.status = 'active' AND p.ends_on < win.win_end, CONCAT('OVERDUE: still active after its planned end date of ', p.ends_on, '.'), NULL) AS overdue_flag, IF(p.is_billable, CONCAT('billable at $', FORMAT(p.hourly_rate, 2), ' per hour'), 'non-billable (internal work)') AS billing, CASE WHEN p.starts_on IS NOT NULL AND p.ends_on IS NOT NULL THEN CONCAT(p.starts_on, ' to ', p.ends_on) WHEN p.starts_on IS NOT NULL THEN CONCAT('started ', p.starts_on, ', no planned end date') WHEN p.ends_on IS NOT NULL THEN CONCAT('planned end ', p.ends_on) END AS planned, NULLIF(TRIM(p.description), '') AS description, tot.current_stage, FORMAT(tot.mins / 60, 2) AS hours, FORMAT(tot.bmins / 60, 2) AS b_hours, FORMAT((tot.mins - tot.bmins) / 60, 2) AS nb_hours, FORMAT(tot.value, 2) AS value, tot.entries, tot.first_entry, tot.last_entry, IF(tot.project_id IS NULL, 'No time was logged against this project during the snapshot period (10 Jul to 10 Sep 2026).', NULL) AS no_time, IF(tot.project_id IS NULL, NULL, win.win_start) AS win_start, IF(tot.project_id IS NULL, NULL, win.win_end) AS win_end, FORMAT(tot.r_mins / 60, 2) AS r_hours, FORMAT(tot.r_bmins / 60, 2) AS r_b_hours, FORMAT(tot.r_value, 2) AS r_value, st.by_stage, recent.notes AS recent_notes FROM gracesoft_desk_snapshot.projects p CROSS JOIN win LEFT JOIN tot ON tot.project_id = p.id LEFT JOIN st ON st.project_id = p.id LEFT JOIN recent ON recent.project_id = p.id WHERE p.deleted_at IS NULL",
+      "idColumn": "id",
+      "text": [
+        "GraceSoft Desk project: {{name}} ({{code}})",
+        "Status: {{status}}",
+        "{{overdue_flag}}",
+        "Billing: {{billing}}",
+        "Planned dates: {{planned}}",
+        "Description: {{description}}",
+        "Current SDLC stage (stage of its most recent time entry): {{current_stage}}",
+        "Time logged in the snapshot period: {{hours}} h total ({{b_hours}} h billable, {{nb_hours}} h non-billable), billable value ${{value}}, from {{entries}} time entries between {{first_entry}} and {{last_entry}}.",
+        "{{no_time}}",
+        "Rolling last 30 business days ({{win_start}} to {{win_end}}): {{r_hours}} h total, {{r_b_hours}} h billable, billable value ${{r_value}}.",
+        "Hours by stage: {{by_stage}}",
+        "Most recent time entries (work notes):\n{{recent_notes}}"
+      ],
+      "metadata": ["code", "name", "status", "is_billable", "current_stage"]
+    },
+    {
+      "name": "desk-hours-rolling-30bd",
+      "sql": "WITH RECURSIVE cal AS (SELECT DATE '2026-09-10' AS d UNION ALL SELECT d - INTERVAL 1 DAY FROM cal WHERE d > DATE '2026-09-10' - INTERVAL 60 DAY), win AS (SELECT MIN(d) AS win_start, DATE '2026-09-10' AS win_end FROM (SELECT d FROM cal WHERE WEEKDAY(d) < 5 ORDER BY d DESC LIMIT 30) bd), e AS (SELECT te.project_id, te.entry_date, te.duration_minutes, te.is_billable, te.billable_amount, p.name AS project, p.code, p.status AS pstatus, IFNULL(ps.name, 'No stage') AS stage, IFNULL(ps.sort_order, 99) AS sort_order FROM gracesoft_desk_snapshot.time_entries te JOIN gracesoft_desk_snapshot.projects p ON p.id = te.project_id LEFT JOIN gracesoft_desk_snapshot.project_stages ps ON ps.id = te.project_stage_id CROSS JOIN win WHERE te.deleted_at IS NULL AND te.entry_date BETWEEN win.win_start AND win.win_end), t AS (SELECT COUNT(*) AS entries, COUNT(DISTINCT project_id) AS projects, COUNT(DISTINCT entry_date) AS days_worked, SUM(duration_minutes) AS mins, SUM(IF(is_billable, duration_minutes, 0)) AS bmins, SUM(billable_amount) AS value FROM e), bp AS (SELECT GROUP_CONCAT(CONCAT('- ', project, ' (', code, ', ', pstatus, '): ', FORMAT(mins / 60, 2), ' h total, ', FORMAT(bmins / 60, 2), ' h billable, billable value $', FORMAT(value, 2)) ORDER BY bmins DESC, mins DESC SEPARATOR '\\n') AS by_project FROM (SELECT project_id, project, code, pstatus, SUM(duration_minutes) AS mins, SUM(IF(is_billable, duration_minutes, 0)) AS bmins, SUM(billable_amount) AS value FROM e GROUP BY project_id, project, code, pstatus) x), bs AS (SELECT GROUP_CONCAT(CONCAT('- ', stage, ': ', FORMAT(mins / 60, 2), ' h total, ', FORMAT(bmins / 60, 2), ' h billable') ORDER BY sort_order SEPARATOR '\\n') AS by_stage FROM (SELECT stage, MIN(sort_order) AS sort_order, SUM(duration_minutes) AS mins, SUM(IF(is_billable, duration_minutes, 0)) AS bmins FROM e GROUP BY stage) x), bw AS (SELECT GROUP_CONCAT(CONCAT('- Week starting Monday ', wk, ': ', FORMAT(mins / 60, 2), ' h total, ', FORMAT(bmins / 60, 2), ' h billable') ORDER BY wk SEPARATOR '\\n') AS by_week FROM (SELECT entry_date - INTERVAL WEEKDAY(entry_date) DAY AS wk, SUM(duration_minutes) AS mins, SUM(IF(is_billable, duration_minutes, 0)) AS bmins FROM e GROUP BY wk) x) SELECT /*+ SET_VAR(group_concat_max_len = 1000000) */ 'rolling-30bd' AS id, win.win_start, win.win_end, t.entries, t.projects, t.days_worked, FORMAT(t.mins / 60, 2) AS hours, FORMAT(t.bmins / 60, 2) AS b_hours, FORMAT((t.mins - t.bmins) / 60, 2) AS nb_hours, FORMAT(t.value, 2) AS value, FORMAT(t.bmins / 60 / 30, 2) AS avg_b_hours, (SELECT MAX(entry_date) FROM gracesoft_desk_snapshot.time_entries WHERE deleted_at IS NULL) AS last_entry, bp.by_project, bs.by_stage, bw.by_week FROM win CROSS JOIN t CROSS JOIN bp CROSS JOIN bs CROSS JOIN bw",
+      "idColumn": "id",
+      "text": [
+        "GraceSoft Desk: billable hours over the rolling last 30 business days",
+        "Window: {{win_start}} to {{win_end}}. That is 30 business days (Monday to Friday) counting back from 10 Sep 2026, the end of the snapshot. Public holidays are not excluded, and any weekend work inside the window is counted. The last time entry in the snapshot is on {{last_entry}}.",
+        "Total logged: {{hours}} h from {{entries}} time entries across {{projects}} projects, on {{days_worked}} distinct days.",
+        "Billable: {{b_hours}} h, with a billable value of ${{value}}. Non-billable: {{nb_hours}} h.",
+        "Average billable hours per business day: {{avg_b_hours}} h.",
+        "Billable value is hours x the project's hourly rate. It is not money received; payments are recorded as income transactions.",
+        "By project:\n{{by_project}}",
+        "By SDLC stage:\n{{by_stage}}",
+        "By week:\n{{by_week}}"
+      ],
+      "metadata": ["win_start", "win_end"]
+    },
+    {
+      "name": "desk-finance-rolling-30bd",
+      "sql": "WITH RECURSIVE cal AS (SELECT DATE '2026-09-10' AS d UNION ALL SELECT d - INTERVAL 1 DAY FROM cal WHERE d > DATE '2026-09-10' - INTERVAL 60 DAY), win AS (SELECT MIN(d) AS win_start, DATE '2026-09-10' AS win_end FROM (SELECT d FROM cal WHERE WEEKDAY(d) < 5 ORDER BY d DESC LIMIT 30) bd), tx AS (SELECT t.transaction_date, t.direction, t.status, t.net_amount, IFNULL(tc.name, 'Uncategorised') AS category, a.name AS account, pm.name AS payment_method, NULLIF(TRIM(REPLACE(SUBSTRING_INDEX(REPLACE(IFNULL(t.description, ''), '\\r', ''), '\\n', 1), 'â€“', '-')), '') AS summary FROM gracesoft_desk_snapshot.transactions t LEFT JOIN gracesoft_desk_snapshot.transaction_categories tc ON tc.id = t.transaction_category_id LEFT JOIN gracesoft_desk_snapshot.accounts a ON a.id = t.account_id LEFT JOIN gracesoft_desk_snapshot.payment_methods pm ON pm.id = t.payment_method_id CROSS JOIN win WHERE t.deleted_at IS NULL AND t.transaction_date BETWEEN win.win_start AND win.win_end), s AS (SELECT COUNT(*) AS n, SUM(IF(status = 'completed' AND direction = 'in', net_amount, 0)) AS income, SUM(status = 'completed' AND direction = 'in') AS income_n, SUM(IF(status = 'completed' AND direction = 'out', net_amount, 0)) AS expense, SUM(status = 'completed' AND direction = 'out') AS expense_n, SUM(IF(status = 'pending', net_amount, 0)) AS pending, SUM(status = 'pending') AS pending_n FROM tx), bc AS (SELECT GROUP_CONCAT(CONCAT('- ', IF(direction = 'in', 'Income: ', 'Expense: '), category, ': $', FORMAT(amt, 2), ' (', n, IF(n = 1, ' transaction)', ' transactions)')) ORDER BY direction, amt DESC SEPARATOR '\\n') AS by_category FROM (SELECT direction, category, SUM(net_amount) AS amt, COUNT(*) AS n FROM tx WHERE status = 'completed' GROUP BY direction, category) x), l AS (SELECT GROUP_CONCAT(CONCAT('- ', transaction_date, ' ', IF(direction = 'in', 'IN ', 'OUT '), '$', FORMAT(net_amount, 2), ': ', IFNULL(summary, '(no description)'), ' [', category, '; ', IFNULL(account, 'no account'), '; ', IFNULL(payment_method, 'no payment method'), IF(status = 'completed', '', CONCAT('; ', status)), ']') ORDER BY transaction_date, net_amount DESC SEPARATOR '\\n') AS list FROM tx) SELECT /*+ SET_VAR(group_concat_max_len = 1000000) */ 'rolling-30bd' AS id, win.win_start, win.win_end, s.n, FORMAT(s.income, 2) AS income, s.income_n, FORMAT(s.expense, 2) AS expense, s.expense_n, CONCAT(IF(s.income - s.expense < 0, '-', ''), '$', FORMAT(ABS(s.income - s.expense), 2)) AS net, IF(s.pending_n > 0, CONCAT('Pending (not yet settled): $', FORMAT(s.pending, 2), ' across ', s.pending_n, ' transactions.'), NULL) AS pending_line, IF(s.income_n = 0, 'No income transactions were recorded in Desk in this window, so money in is $0.00. Billable value from time entries is not the same as income received.', NULL) AS no_income, (SELECT MAX(transaction_date) FROM gracesoft_desk_snapshot.transactions WHERE deleted_at IS NULL) AS last_tx, bc.by_category, l.list FROM win CROSS JOIN s CROSS JOIN bc CROSS JOIN l",
+      "idColumn": "id",
+      "text": [
+        "GraceSoft Desk: finances (money in, money out, cash flow) over the rolling last 30 business days",
+        "Window: {{win_start}} to {{win_end}}. That is 30 business days (Monday to Friday) counting back from 10 Sep 2026, the end of the snapshot. The last transaction recorded in the snapshot is dated {{last_tx}}.",
+        "Money in (completed income): ${{income}} from {{income_n}} transactions.",
+        "Money out (completed expenses): ${{expense}} from {{expense_n}} transactions.",
+        "Net cash flow (in minus out): {{net}}.",
+        "{{pending_line}}",
+        "{{no_income}}",
+        "Amounts are Desk's net amounts, the same figure Desk's finance report and dashboard total.",
+        "By category:\n{{by_category}}",
+        "All transactions in the window:\n{{list}}"
+      ],
+      "metadata": ["win_start", "win_end"]
+    },
+    {
+      "name": "desk-monthly-summary",
+      "sql": "WITH te AS (SELECT te.project_id, te.duration_minutes, te.is_billable, te.billable_amount, DATE_FORMAT(te.entry_date, '%Y-%m') AS ym, p.name AS project, IFNULL(ps.name, 'No stage') AS stage, IFNULL(ps.sort_order, 99) AS sort_order FROM gracesoft_desk_snapshot.time_entries te JOIN gracesoft_desk_snapshot.projects p ON p.id = te.project_id LEFT JOIN gracesoft_desk_snapshot.project_stages ps ON ps.id = te.project_stage_id WHERE te.deleted_at IS NULL), tx AS (SELECT t.direction, t.status, t.net_amount, DATE_FORMAT(t.transaction_date, '%Y-%m') AS ym, IFNULL(tc.name, 'Uncategorised') AS category FROM gracesoft_desk_snapshot.transactions t LEFT JOIN gracesoft_desk_snapshot.transaction_categories tc ON tc.id = t.transaction_category_id WHERE t.deleted_at IS NULL), months AS (SELECT ym FROM te UNION SELECT ym FROM tx), ht AS (SELECT ym, COUNT(*) AS entries, COUNT(DISTINCT project_id) AS projects, SUM(duration_minutes) AS mins, SUM(IF(is_billable, duration_minutes, 0)) AS bmins, SUM(billable_amount) AS value FROM te GROUP BY ym), hp AS (SELECT ym, GROUP_CONCAT(CONCAT('- ', project, ': ', FORMAT(mins / 60, 2), ' h (', FORMAT(bmins / 60, 2), ' h billable, $', FORMAT(value, 2), ')') ORDER BY mins DESC SEPARATOR '\\n') AS by_project FROM (SELECT ym, project_id, project, SUM(duration_minutes) AS mins, SUM(IF(is_billable, duration_minutes, 0)) AS bmins, SUM(billable_amount) AS value FROM te GROUP BY ym, project_id, project) x GROUP BY ym), hs AS (SELECT ym, GROUP_CONCAT(CONCAT(stage, ' ', FORMAT(mins / 60, 2), ' h') ORDER BY sort_order SEPARATOR ', ') AS by_stage FROM (SELECT ym, stage, MIN(sort_order) AS sort_order, SUM(duration_minutes) AS mins FROM te GROUP BY ym, stage) x GROUP BY ym), ft AS (SELECT ym, COUNT(*) AS n, SUM(IF(status = 'completed' AND direction = 'in', net_amount, 0)) AS income, SUM(IF(status = 'completed' AND direction = 'out', net_amount, 0)) AS expense, SUM(status = 'completed' AND direction = 'in') AS income_n FROM tx GROUP BY ym), fc AS (SELECT ym, GROUP_CONCAT(CONCAT('- ', IF(direction = 'in', 'Income: ', 'Expense: '), category, ': $', FORMAT(amt, 2), ' (', n, IF(n = 1, ' transaction)', ' transactions)')) ORDER BY direction, amt DESC SEPARATOR '\\n') AS by_category FROM (SELECT ym, direction, category, SUM(net_amount) AS amt, COUNT(*) AS n FROM tx WHERE status = 'completed' GROUP BY ym, direction, category) x GROUP BY ym), m AS (SELECT ym, DATE(CONCAT(ym, '-01')) AS m_start, LAST_DAY(DATE(CONCAT(ym, '-01'))) AS m_end FROM months) SELECT /*+ SET_VAR(group_concat_max_len = 1000000) */ m.ym AS id, m.ym AS month, DATE_FORMAT(m.m_start, '%M %Y') AS month_label, GREATEST(m.m_start, DATE '2026-07-10') AS covers_from, LEAST(m.m_end, DATE '2026-09-10') AS covers_to, IF(m.m_start < DATE '2026-07-10' OR m.m_end > DATE '2026-09-10', 'This is a partial month: the snapshot only covers these dates.', NULL) AS partial, FORMAT(ht.mins / 60, 2) AS hours, FORMAT(ht.bmins / 60, 2) AS b_hours, FORMAT((ht.mins - ht.bmins) / 60, 2) AS nb_hours, FORMAT(ht.value, 2) AS value, ht.entries, ht.projects, IF(ht.ym IS NULL, 'No time was logged in Desk this month.', NULL) AS no_time, hp.by_project, hs.by_stage, FORMAT(ft.income, 2) AS income, FORMAT(ft.expense, 2) AS expense, CONCAT(IF(ft.income - ft.expense < 0, '-', ''), '$', FORMAT(ABS(ft.income - ft.expense), 2)) AS net, ft.n AS tx_n, IF(ft.ym IS NULL, 'No transactions were recorded in Desk this month.', IF(ft.income_n = 0, 'No income was recorded this month, so money in is $0.00.', NULL)) AS finance_note, fc.by_category FROM m LEFT JOIN ht ON ht.ym = m.ym LEFT JOIN hp ON hp.ym = m.ym LEFT JOIN hs ON hs.ym = m.ym LEFT JOIN ft ON ft.ym = m.ym LEFT JOIN fc ON fc.ym = m.ym",
+      "idColumn": "id",
+      "text": [
+        "GraceSoft Desk monthly summary: {{month_label}}",
+        "Covers {{covers_from}} to {{covers_to}}.",
+        "{{partial}}",
+        "Hours: {{hours}} h logged ({{b_hours}} h billable, {{nb_hours}} h non-billable) from {{entries}} time entries across {{projects}} projects. Billable value: ${{value}}.",
+        "{{no_time}}",
+        "Hours by project:\n{{by_project}}",
+        "Hours by SDLC stage: {{by_stage}}",
+        "Finance: money in ${{income}}, money out ${{expense}}, net cash flow {{net}}, from {{tx_n}} transactions.",
+        "{{finance_note}}",
+        "Finance by category:\n{{by_category}}"
+      ],
+      "metadata": ["month"]
+    },
+    {
+      "name": "desk-transaction",
+      "sql": "SELECT t.id, t.transaction_code, t.transaction_date, DATE_FORMAT(t.transaction_date, '%Y-%m') AS month, DATE_FORMAT(t.transaction_date, '%Y%m%d') + 0 AS date_num, t.type, t.direction, t.status, FORMAT(t.net_amount, 2) AS net_amount, FORMAT(t.amount, 2) AS amount, IF(t.gst_amount > 0, FORMAT(t.gst_amount, 2), NULL) AS gst_amount, IFNULL(tc.name, 'Uncategorised') AS category, a.name AS account, pm.name AS payment_method, p.name AS project, NULLIF(TRIM(REPLACE(REPLACE(REPLACE(IFNULL(t.description, ''), '\\r', ''), '\\n', ' '), 'â€“', '-')), '') AS description FROM gracesoft_desk_snapshot.transactions t LEFT JOIN gracesoft_desk_snapshot.transaction_categories tc ON tc.id = t.transaction_category_id LEFT JOIN gracesoft_desk_snapshot.accounts a ON a.id = t.account_id LEFT JOIN gracesoft_desk_snapshot.payment_methods pm ON pm.id = t.payment_method_id LEFT JOIN gracesoft_desk_snapshot.projects p ON p.id = t.project_id WHERE t.deleted_at IS NULL",
+      "idColumn": "id",
+      "text": [
+        "GraceSoft Desk transaction {{transaction_code}} on {{transaction_date}}",
+        "Type: {{type}} (money {{direction}}), status: {{status}}",
+        "Amount: ${{net_amount}} (net amount; amount as billed: ${{amount}})",
+        "GST: ${{gst_amount}}",
+        "Category: {{category}}",
+        "What it was for: {{description}}",
+        "Account: {{account}}; payment method: {{payment_method}}",
+        "Project: {{project}}"
+      ],
+      "metadata": ["transaction_date", "month", "date_num", "type", "direction", "status", "category", "account", "payment_method"]
+    },
+    {
+      "name": "desk-accounts",
+      "sql": "SELECT /*+ SET_VAR(group_concat_max_len = 1000000) */ 'all' AS id, COUNT(*) AS n, GROUP_CONCAT(CONCAT('- ', name, ' (', code, ', ', type, ', ', currency, IF(is_active, '', ', inactive'), '): opening balance $', FORMAT(opening_balance, 2), ', current balance ', IF(current_balance < 0, '-', ''), '$', FORMAT(ABS(current_balance), 2)) ORDER BY id SEPARATOR '\\n') AS list, FORMAT(SUM(IF(is_active, current_balance, 0)), 2) AS total FROM gracesoft_desk_snapshot.accounts",
+      "idColumn": "id",
+      "text": [
+        "GraceSoft Desk: accounts and cash position (balances as stored in Desk)",
+        "{{n}} accounts. Combined current balance of active accounts: ${{total}}. Card accounts show negative balances for amounts owed.",
+        "Accounts:\n{{list}}"
+      ]
+    },
+    {
+      "name": "desk-vendor",
+      "sql": "SELECT /*+ SET_VAR(group_concat_max_len = 1000000) */ v.id, v.vendor_code, v.name, IFNULL(c.name, 'Uncategorised') AS category, v.status, NULLIF(TRIM(v.notes), '') AS notes, COUNT(s.id) AS service_n, GROUP_CONCAT(CONCAT('- ', s.name, IFNULL(CONCAT(' (plan: ', s.plan, ')'), ''), ', ', IFNULL(sc.name, 'uncategorised'), ', ', s.status) ORDER BY s.name SEPARATOR '\\n') AS services FROM gracesoft_desk_snapshot.vendors v LEFT JOIN gracesoft_desk_snapshot.categories c ON c.id = v.category_id LEFT JOIN gracesoft_desk_snapshot.services s ON s.vendor_id = v.id AND s.deleted_at IS NULL LEFT JOIN gracesoft_desk_snapshot.categories sc ON sc.id = s.category_id WHERE v.deleted_at IS NULL GROUP BY v.id, v.vendor_code, v.name, c.name, v.status, v.notes",
+      "idColumn": "id",
+      "text": [
+        "GraceSoft Desk vendor: {{name}} ({{vendor_code}})",
+        "Category: {{category}}; status: {{status}}",
+        "Notes: {{notes}}",
+        "Services and subscriptions bought from this vendor ({{service_n}}):\n{{services}}"
+      ],
+      "metadata": ["name", "category", "status"]
+    },
+    {
+      "name": "skylight-overview",
+      "sql": "WITH b AS (SELECT id, name FROM gracesoft_skylight_snapshot.boards WHERE name <> 'Welcome to GraceSoft Skylight'), cards AS (SELECT c.id, c.title, c.created_at, b.id AS board_id, b.name AS board, col.name AS col, col.position AS cpos, col.name IN ('Completed', 'Done') AS is_done, ROW_NUMBER() OVER (PARTITION BY col.name IN ('Completed', 'Done') ORDER BY c.created_at DESC) AS rn FROM gracesoft_skylight_snapshot.cards c JOIN gracesoft_skylight_snapshot.columns col ON col.id = c.column_id JOIN b ON b.id = col.board_id), bc AS (SELECT b.id, b.name, COUNT(cards.id) AS n, IFNULL(SUM(cards.is_done), 0) AS done_n FROM b LEFT JOIN cards ON cards.board_id = b.id GROUP BY b.id, b.name) SELECT /*+ SET_VAR(group_concat_max_len = 1000000) */ 'all' AS id, (SELECT COUNT(*) FROM bc) AS boards, (SELECT COUNT(*) FROM cards) AS total, (SELECT SUM(is_done) FROM cards) AS done_n, (SELECT SUM(NOT is_done) FROM cards) AS open_n, (SELECT GROUP_CONCAT(CONCAT('- ', name, ': ', n, ' cards, ', done_n, ' completed, ', n - done_n, ' open') ORDER BY id SEPARATOR '\\n') FROM bc) AS board_list, (SELECT GROUP_CONCAT(CONCAT('- “', title, '” on ', board, ', in ', col) ORDER BY board_id, cpos, id SEPARATOR '\\n') FROM cards WHERE NOT is_done) AS open_list, (SELECT GROUP_CONCAT(CONCAT('“', title, '” (', board, ')') ORDER BY created_at DESC SEPARATOR ', ') FROM cards WHERE is_done AND rn <= 5) AS recent_done",
+      "idColumn": "id",
+      "text": [
+        "GraceSoft Skylight: status of all boards and ongoing (in-progress) work, as of 10 Sep 2026, the end of the snapshot",
+        "{{boards}} boards with {{total}} cards: {{done_n}} completed (in a Completed or Done column) and {{open_n}} open or ongoing. The built-in 'Welcome to GraceSoft Skylight' tutorial board is excluded.",
+        "Boards:\n{{board_list}}",
+        "Open or ongoing cards (not in a Completed/Done column):\n{{open_list}}",
+        "Most recently created completed cards: {{recent_done}}"
+      ]
+    },
+    {
+      "name": "skylight-board",
+      "sql": "WITH cards AS (SELECT c.id, c.title, c.created_at, col.board_id, col.name AS col, col.position AS cpos, col.name IN ('Completed', 'Done') AS is_done, ROW_NUMBER() OVER (PARTITION BY col.board_id, col.name IN ('Completed', 'Done') ORDER BY c.created_at DESC) AS rn FROM gracesoft_skylight_snapshot.cards c JOIN gracesoft_skylight_snapshot.columns col ON col.id = c.column_id), cols AS (SELECT col.board_id, GROUP_CONCAT(CONCAT(col.name, ' ', (SELECT COUNT(*) FROM gracesoft_skylight_snapshot.cards c WHERE c.column_id = col.id)) ORDER BY col.position SEPARATOR ', ') AS by_column FROM gracesoft_skylight_snapshot.columns col GROUP BY col.board_id), tg AS (SELECT bt.board_id, GROUP_CONCAT(t.name ORDER BY t.name SEPARATOR ', ') AS tags FROM gracesoft_skylight_snapshot.board_tags bt JOIN gracesoft_skylight_snapshot.tags t ON t.id = bt.tag_id GROUP BY bt.board_id) SELECT /*+ SET_VAR(group_concat_max_len = 1000000) */ b.id, b.name, NULLIF(TRIM(b.description), '') AS description, DATE(b.created_at) AS created, tg.tags, cols.by_column, (SELECT COUNT(*) FROM cards WHERE board_id = b.id) AS n, (SELECT COUNT(*) FROM cards WHERE board_id = b.id AND is_done) AS done_n, (SELECT GROUP_CONCAT(CONCAT('- “', title, '” in ', col, ', created ', DATE(created_at)) ORDER BY cpos, id SEPARATOR '\\n') FROM cards WHERE board_id = b.id AND NOT is_done) AS open_list, IF(EXISTS (SELECT 1 FROM cards WHERE board_id = b.id AND NOT is_done), NULL, 'Nothing is open: every card on this board is in a Completed/Done column.') AS no_open, (SELECT GROUP_CONCAT(CONCAT('“', title, '”') ORDER BY created_at DESC SEPARATOR ', ') FROM cards WHERE board_id = b.id AND is_done AND rn <= 5) AS recent_done FROM gracesoft_skylight_snapshot.boards b LEFT JOIN cols ON cols.board_id = b.id LEFT JOIN tg ON tg.board_id = b.id WHERE b.name <> 'Welcome to GraceSoft Skylight'",
+      "idColumn": "id",
+      "text": [
+        "GraceSoft Skylight board: {{name}}",
+        "Description: {{description}}",
+        "Tags: {{tags}}",
+        "Created {{created}}. {{n}} cards, {{done_n}} of them completed.",
+        "Cards per column: {{by_column}}",
+        "Open or ongoing cards:\n{{open_list}}",
+        "{{no_open}}",
+        "Most recently created completed cards: {{recent_done}}"
+      ],
+      "metadata": ["name"]
+    },
+    {
+      "name": "skylight-card",
+      "sql": "WITH ci AS (SELECT cl.card_id, SUM(i.is_completed) AS done, COUNT(i.id) AS total, GROUP_CONCAT(CONCAT(IF(i.is_completed, '[x] ', '[ ] '), i.body) ORDER BY cl.id, i.position SEPARATOR '\\n') AS items FROM gracesoft_skylight_snapshot.checklists cl JOIN gracesoft_skylight_snapshot.checklist_items i ON i.checklist_id = cl.id GROUP BY cl.card_id), cm AS (SELECT card_id, COUNT(*) AS n, GROUP_CONCAT(CONCAT('- ', DATE_FORMAT(CONVERT_TZ(created_at, '+00:00', '+08:00'), '%Y-%m-%d %H:%i'), ' SGT: ', TRIM(REPLACE(REPLACE(body, '\\r', ''), '\\n', ' '))) ORDER BY created_at SEPARATOR '\\n') AS comments FROM gracesoft_skylight_snapshot.comments GROUP BY card_id), mn AS (SELECT card_id, GROUP_CONCAT(CONCAT('### ', name, '\\n', content) ORDER BY id SEPARATOR '\\n\\n') AS notes FROM gracesoft_skylight_snapshot.markdown_notes GROUP BY card_id), lb AS (SELECT cl.card_id, GROUP_CONCAT(l.name ORDER BY l.name SEPARATOR ', ') AS labels FROM gracesoft_skylight_snapshot.card_labels cl JOIN gracesoft_skylight_snapshot.labels l ON l.id = cl.label_id GROUP BY cl.card_id), mv AS (SELECT subject_id AS card_id, MAX(created_at) AS last_moved FROM gracesoft_skylight_snapshot.activity_logs WHERE event = 'card.moved' AND subject_type LIKE '%Card' GROUP BY subject_id) SELECT /*+ SET_VAR(group_concat_max_len = 1000000) */ c.id, c.title, b.name AS board, col.name AS column_name, IF(col.name IN ('Completed', 'Done'), 'finished', 'open') AS state, STR_TO_DATE(c.title, '%e %b %Y') AS log_date, DATE_FORMAT(STR_TO_DATE(c.title, '%e %b %Y'), '%Y%m%d') + 0 AS log_date_num, NULLIF(TRIM(c.description), '') AS description, DATE(c.starts_at) AS starts_on, DATE(c.ends_at) AS due_on, CASE WHEN c.ends_at IS NULL OR col.name IN ('Completed', 'Done') THEN NULL WHEN DATE(c.ends_at) < DATE '2026-09-10' THEN 'OVERDUE as of 10 Sep 2026.' WHEN DATE(c.ends_at) = DATE '2026-09-10' THEN 'Due today (10 Sep 2026).' END AS due_state, lb.labels, DATE_FORMAT(CONVERT_TZ(c.created_at, '+00:00', '+08:00'), '%Y-%m-%d %H:%i') AS created, DATE_FORMAT(CONVERT_TZ(mv.last_moved, '+00:00', '+08:00'), '%Y-%m-%d %H:%i') AS last_moved, ci.done AS cl_done, ci.total AS cl_total, ci.items, cm.n AS comment_n, cm.comments, mn.notes FROM gracesoft_skylight_snapshot.cards c JOIN gracesoft_skylight_snapshot.columns col ON col.id = c.column_id JOIN gracesoft_skylight_snapshot.boards b ON b.id = col.board_id LEFT JOIN ci ON ci.card_id = c.id LEFT JOIN cm ON cm.card_id = c.id LEFT JOIN mn ON mn.card_id = c.id LEFT JOIN lb ON lb.card_id = c.id LEFT JOIN mv ON mv.card_id = c.id WHERE b.name <> 'Welcome to GraceSoft Skylight'",
+      "idColumn": "id",
+      "text": [
+        "GraceSoft Skylight card: {{title}}",
+        "Board: {{board}}; column: {{column_name}} ({{state}})",
+        "Work-log date (the card is titled with a date): {{log_date}}",
+        "Description: {{description}}",
+        "Labels: {{labels}}",
+        "Starts: {{starts_on}}",
+        "Due: {{due_on}}",
+        "{{due_state}}",
+        "Created: {{created}} SGT",
+        "Last moved between columns: {{last_moved}} SGT",
+        "Checklist progress: {{cl_done}} of {{cl_total}} items done",
+        "Checklist:\n{{items}}",
+        "Progress updates (comments, {{comment_n}}):\n{{comments}}",
+        "Notes:\n{{notes}}"
+      ],
+      "metadata": ["board", "column_name", "state", "log_date", "log_date_num"]
+    },
+    {
+      "name": "overdue-and-deadlines",
+      "sql": "WITH cards AS (SELECT c.id, c.title, c.ends_at, b.id AS board_id, b.name AS board, col.name AS col, col.position AS cpos, col.name IN ('Completed', 'Done') AS is_done FROM gracesoft_skylight_snapshot.cards c JOIN gracesoft_skylight_snapshot.columns col ON col.id = c.column_id JOIN gracesoft_skylight_snapshot.boards b ON b.id = col.board_id WHERE b.name <> 'Welcome to GraceSoft Skylight'), s AS (SELECT COUNT(*) AS total, SUM(ends_at IS NOT NULL) AS dated, GROUP_CONCAT(IF(NOT is_done AND DATE(ends_at) < DATE '2026-09-10', CONCAT('- “', title, '” on ', board, ' (', col, '), due ', DATE(ends_at), ', ', DATEDIFF(DATE '2026-09-10', DATE(ends_at)), ' days overdue'), NULL) ORDER BY ends_at SEPARATOR '\\n') AS overdue, GROUP_CONCAT(IF(NOT is_done AND DATE(ends_at) = DATE '2026-09-10', CONCAT('- “', title, '” on ', board, ' (', col, ')'), NULL) SEPARATOR '\\n') AS due_today, GROUP_CONCAT(IF(NOT is_done AND DATE(ends_at) > DATE '2026-09-10', CONCAT('- “', title, '” on ', board, ' (', col, '), due ', DATE(ends_at)), NULL) ORDER BY ends_at SEPARATOR '\\n') AS upcoming, GROUP_CONCAT(IF(NOT is_done AND ends_at IS NULL, CONCAT('- “', title, '” on ', board, ' (', col, ')'), NULL) ORDER BY board_id, cpos SEPARATOR '\\n') AS open_undated FROM cards), dp AS (SELECT GROUP_CONCAT(IF(status = 'active' AND ends_on < DATE '2026-09-10', CONCAT('- ', name, ' (', code, '): planned end date ', ends_on, ', still active, ', DATEDIFF(DATE '2026-09-10', ends_on), ' days past'), NULL) ORDER BY ends_on SEPARATOR '\\n') AS desk_overdue, GROUP_CONCAT(IF(status = 'active' AND ends_on IS NULL, name, NULL) ORDER BY id SEPARATOR ', ') AS active_no_end FROM gracesoft_desk_snapshot.projects WHERE deleted_at IS NULL) SELECT /*+ SET_VAR(group_concat_max_len = 1000000) */ 'all' AS id, s.overdue, s.due_today, s.upcoming, s.open_undated, CASE WHEN s.dated = 0 THEN CONCAT('None of the ', s.total, ' Skylight cards has a due date, so no Skylight card is overdue or due today. Skylight works out overdue status from due dates only.') WHEN s.overdue IS NULL THEN 'No Skylight card is overdue.' END AS no_overdue, dp.desk_overdue, IF(dp.desk_overdue IS NULL, 'No active Desk project is past its planned end date.', NULL) AS no_desk_overdue, dp.active_no_end FROM s CROSS JOIN dp",
+      "idColumn": "id",
+      "text": [
+        "Overdue projects and tasks, and what's due, as of 10 Sep 2026 (the end of the snapshot), across GraceSoft Skylight and GraceSoft Desk",
+        "Overdue Skylight cards (due date passed, not in a Completed/Done column):\n{{overdue}}",
+        "{{no_overdue}}",
+        "Skylight cards due today:\n{{due_today}}",
+        "Skylight cards due later:\n{{upcoming}}",
+        "Open Skylight cards with no due date:\n{{open_undated}}",
+        "Overdue Desk projects (still active after their planned end date):\n{{desk_overdue}}",
+        "{{no_desk_overdue}}",
+        "Active Desk projects with no planned end date, which can't be overdue: {{active_no_end}}"
+      ]
+    },
+    {
+      "name": "daily-log",
+      "sql": "WITH te AS (SELECT te.id, te.entry_date AS d, te.project_id, p.name AS project, IFNULL(ps.name, 'no stage') AS stage, te.duration_minutes, te.is_billable, te.billable_amount, te.notes FROM gracesoft_desk_snapshot.time_entries te JOIN gracesoft_desk_snapshot.projects p ON p.id = te.project_id LEFT JOIN gracesoft_desk_snapshot.project_stages ps ON ps.id = te.project_stage_id WHERE te.deleted_at IS NULL), dk AS (SELECT d, COUNT(*) AS entries, COUNT(DISTINCT project_id) AS projects, SUM(duration_minutes) AS mins, SUM(IF(is_billable, duration_minutes, 0)) AS bmins, SUM(billable_amount) AS value, GROUP_CONCAT(CONCAT('- ', project, ', ', stage, ', ', FORMAT(duration_minutes / 60, 2), ' h', IF(is_billable, '', ' (non-billable)'), ': ', IFNULL(NULLIF(TRIM(REPLACE(REPLACE(notes, '\\r', ' '), '\\n', ' ')), ''), '(no notes)')) ORDER BY project, id SEPARATOR '\\n') AS entry_list FROM te GROUP BY d), sc AS (SELECT c.id, c.title, b.name AS board, col.name AS col, STR_TO_DATE(c.title, '%e %b %Y') AS d FROM gracesoft_skylight_snapshot.cards c JOIN gracesoft_skylight_snapshot.columns col ON col.id = c.column_id JOIN gracesoft_skylight_snapshot.boards b ON b.id = col.board_id WHERE b.name <> 'Welcome to GraceSoft Skylight'), scd AS (SELECT * FROM sc WHERE d IS NOT NULL), sk AS (SELECT d, GROUP_CONCAT(CONCAT('“', title, '” on ', board, ' (', col, ')') ORDER BY id SEPARATOR '; ') AS cards FROM scd GROUP BY d), cmt AS (SELECT DATE(CONVERT_TZ(cm.created_at, '+00:00', '+08:00')) AS d, cm.created_at, CONCAT('- ', DATE_FORMAT(CONVERT_TZ(cm.created_at, '+00:00', '+08:00'), '%H:%i'), ' SGT, on card “', sc.title, '” (', sc.board, '): ', TRIM(REPLACE(REPLACE(cm.body, '\\r', ''), '\\n', ' '))) AS line FROM gracesoft_skylight_snapshot.comments cm JOIN sc ON sc.id = cm.card_id), skc AS (SELECT d, GROUP_CONCAT(line ORDER BY created_at SEPARATOR '\\n') AS updates FROM cmt GROUP BY d), ski AS (SELECT scd.d, SUM(i.is_completed) AS done, COUNT(*) AS total, GROUP_CONCAT(CONCAT(IF(i.is_completed, '[x] ', '[ ] '), i.body) ORDER BY scd.id, cl.id, i.position SEPARATOR '\\n') AS items FROM scd JOIN gracesoft_skylight_snapshot.checklists cl ON cl.card_id = scd.id JOIN gracesoft_skylight_snapshot.checklist_items i ON i.checklist_id = cl.id GROUP BY scd.d), days AS (SELECT d FROM dk UNION SELECT d FROM scd UNION SELECT d FROM cmt) SELECT /*+ SET_VAR(group_concat_max_len = 1000000) */ DATE_FORMAT(days.d, '%Y-%m-%d') AS id, DATE_FORMAT(days.d, '%Y-%m-%d') AS date, DATE_FORMAT(days.d, '%Y%m%d') + 0 AS date_num, DATE_FORMAT(days.d, '%Y-%m') AS month, DATE_FORMAT(days.d, '%W %e %M %Y') AS label, FORMAT(dk.mins / 60, 2) AS hours, FORMAT(dk.bmins / 60, 2) AS b_hours, FORMAT(dk.value, 2) AS value, dk.entries, dk.projects, dk.entry_list, IF(dk.d IS NULL, 'No time was logged in Desk on this day.', NULL) AS no_desk, sk.cards, skc.updates, ski.done AS cl_done, ski.total AS cl_total, ski.items, IF(sk.d IS NULL AND skc.d IS NULL, 'Nothing was recorded in Skylight for this day.', NULL) AS no_skylight FROM days LEFT JOIN dk ON dk.d = days.d LEFT JOIN sk ON sk.d = days.d LEFT JOIN skc ON skc.d = days.d LEFT JOIN ski ON ski.d = days.d",
+      "idColumn": "id",
+      "text": [
+        "Daily work log for {{label}}, combining GraceSoft Desk time tracking and GraceSoft Skylight updates",
+        "Desk: {{hours}} h logged ({{b_hours}} h billable, billable value ${{value}}) across {{entries}} time entries on {{projects}} projects.",
+        "Desk time entries (project, stage, duration: what was done):\n{{entry_list}}",
+        "{{no_desk}}",
+        "Skylight work-log card(s) titled with this date: {{cards}}",
+        "Skylight progress updates written this day (comments, Singapore time):\n{{updates}}",
+        "Checklist on this day's work-log card ({{cl_done}} of {{cl_total}} done):\n{{items}}",
+        "{{no_skylight}}"
+      ],
+      "metadata": ["date", "date_num", "month"]
+    }
+  ]
+}
