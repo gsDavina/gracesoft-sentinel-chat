@@ -1,4 +1,4 @@
-export type { ConversationLogger, ConversationMessageLogEntry, BookingLogEntry } from "./conversation-logger.js";
+export type { ConversationDataEraser, ConversationLogger, ConversationMessageLogEntry, BookingLogEntry } from "./conversation-logger.js";
 export { PostgresConversationLogger, createPostgresConversationLoggerFromEnv } from "./postgres-conversation-logger.js";
 export type { PostgresConversationLoggerConfig } from "./postgres-conversation-logger.js";
 export { createPgClient } from "./pg-client.js";

@@ -4,7 +4,8 @@ import { PostgresConversationLogger, createPgClient } from "@gracesoft-sentinel/
 import { createLogger, type Logger } from "@gracesoft-sentinel/logging";
 import { PineconeRecipeProvider, createPineconeClient } from "@gracesoft-sentinel/provider-recipe-pinecone";
 import type { AIProvider, NormalizedMessage, NormalizedResponse, RecipeSourceProvider } from "@gracesoft-sentinel/core";
-import { createOnMessageHandler } from "./on-message.js";
+import { conversationLogEraser, sessionStoreEraser, withUserDataDeletion } from "@gracesoft-sentinel/user-data-deletion";
+import { createOnMessageHandler, sessionIdFor } from "./on-message.js";
 import type { CookServiceEnv } from "./env.js";
 
 export interface Composition {
@@ -55,7 +56,17 @@ export function buildComposition(env: CookServiceEnv): Composition {
   const pgClient = createPgClient(env.DATABASE_URL);
   const conversationLogger = new PostgresConversationLogger({ client: pgClient });
 
-  const onMessage = createOnMessageHandler({ aiProvider, sessionStore, conversationLogger, appLogger, recipeSourceProvider, rateLimiter });
+  const cookOnMessage = createOnMessageHandler({ aiProvider, sessionStore, conversationLogger, appLogger, recipeSourceProvider, rateLimiter });
+  // Outermost, so the command never reaches the agent or the log it erases.
+  const sessionIds = (subject: Parameters<typeof sessionIdFor>[0]) => [sessionIdFor(subject)];
+  const onMessage = withUserDataDeletion(cookOnMessage, {
+    erasers: [sessionStoreEraser(sessionStore, sessionIds), conversationLogEraser(conversationLogger, sessionIds)],
+    pendingStore: sessionStore,
+    whatIsDeleted: ["your conversation history", "your saved chat state"],
+    contact: "hello@gracesoft.dev",
+    onDeleted: ({ subject, erased, failed }) =>
+      appLogger.info({ channel: subject.channel, erased, failed: failed.map((f) => f.eraser) }, "user data deletion completed"),
+  });
 
   const readinessCheck = async (): Promise<boolean> => {
     await redisClient.get("__healthcheck__");

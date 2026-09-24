@@ -73,6 +73,32 @@ describe("PostgresConversationLogger.logBooking", () => {
   });
 });
 
+describe("PostgresConversationLogger.deleteSessionData", () => {
+  it("hard-deletes from both tables by session id and reports the counts", async () => {
+    const client = new FakePgClient();
+    client.query = async (text: string, params: unknown[]) => {
+      client.queries.push({ text, params });
+      return { rows: [{ count: text.includes("conversation_messages") ? 7 : 1 }] };
+    };
+    const logger = new PostgresConversationLogger({ client });
+
+    const result = await logger.deleteSessionData(["cook:telegram:1", "switcher:telegram:1"]);
+
+    expect(result).toEqual({ messages: 7, bookings: 1 });
+    expect(client.queries.map((q) => q.text)).toEqual([
+      expect.stringContaining("DELETE FROM conversation_messages WHERE session_id = ANY($1::text[])"),
+      expect.stringContaining("DELETE FROM bookings WHERE session_id = ANY($1::text[])"),
+    ]);
+    expect(client.queries[0]!.params).toEqual([["cook:telegram:1", "switcher:telegram:1"]]);
+  });
+
+  it("does nothing for an empty id list", async () => {
+    const client = new FakePgClient();
+    expect(await new PostgresConversationLogger({ client }).deleteSessionData([])).toEqual({ messages: 0, bookings: 0 });
+    expect(client.queries).toHaveLength(0);
+  });
+});
+
 describe("createPostgresConversationLoggerFromEnv", () => {
   it("throws a clear error when DATABASE_URL is missing", () => {
     expect(() => createPostgresConversationLoggerFromEnv({} as NodeJS.ProcessEnv)).toThrow(/DATABASE_URL/);

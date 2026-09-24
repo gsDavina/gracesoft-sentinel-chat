@@ -14,16 +14,15 @@
   },
   "dependencies": {
     "@gracesoft-sentinel/agent-cook": "workspace:*",
-    "@gracesoft-sentinel/channel-telegram": "workspace:*",
-    "@gracesoft-sentinel/channel-whatsapp": "workspace:*",
     "@gracesoft-sentinel/core": "workspace:*",
     "@gracesoft-sentinel/logging": "workspace:*",
     "@gracesoft-sentinel/logging-postgres": "workspace:*",
     "@gracesoft-sentinel/provider-ai-openai": "workspace:*",
     "@gracesoft-sentinel/provider-recipe-pinecone": "workspace:*",
     "@gracesoft-sentinel/provider-session-redis": "workspace:*",
+    "@gracesoft-sentinel/user-data-deletion": "workspace:*",
+    "@gracesoft-sentinel/webhook-host": "workspace:*",
     "express": "^4.19.2",
-    "express-rate-limit": "^7.4.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {

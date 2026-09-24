@@ -1,9 +1,7 @@
 import express, { type Express } from "express";
-import { rateLimit } from "express-rate-limit";
-import { TelegramApiClient, TelegramChannelAdapter, createTelegramWebhookRouter } from "@gracesoft-sentinel/channel-telegram";
-import { WhatsAppApiClient, WhatsAppChannelAdapter, createWhatsAppWebhookRouter } from "@gracesoft-sentinel/channel-whatsapp";
 import type { NormalizedMessage, NormalizedResponse } from "@gracesoft-sentinel/core";
 import type { Logger } from "@gracesoft-sentinel/logging";
+import { mountChannels } from "@gracesoft-sentinel/webhook-host";
 import type { DemoServiceEnv } from "./env.js";
 
 export interface BuildServerParams {
@@ -13,26 +11,21 @@ export interface BuildServerParams {
   appLogger: Logger;
 }
 
-/** See concierge-service's equivalent for the rationale (IP-based floor against abuse, not per-chatter fairness). */
-function webhookRateLimiter() {
-  return rateLimit({
-    windowMs: 60_000,
-    limit: 120,
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
-}
-
 /**
- * Composes the deployable HTTP surface — see concierge-service's equivalent
- * for the design rationale. Both channels can technically be enabled at
- * once here exactly like the other services, but for demo-service's whole
- * point ("a single chat provider's chat window"), only enabling one at a
- * time is what actually makes sense in practice.
+ * Composes the deployable HTTP surface: health/readiness endpoints plus
+ * every enabled channel, all running side by side — each webhook channel
+ * at `/{channel}/webhook` (plus the legacy shared `/webhook`, dispatched
+ * by signature header, so already-registered webhook URLs keep working),
+ * and the branded web chats at `/chat/gracesoft/` and `/chat/davdevs/`.
+ * See `@gracesoft-sentinel/webhook-host` for the routing and rate limits.
  */
 export function buildServer(params: BuildServerParams): Express {
   const { env, appLogger } = params;
   const app = express();
+  // Exactly one hop: the reverse proxy/tunnel this service always sits
+  // behind (ngrok locally, a load balancer in production) — not `true`,
+  // which would trust the entire client-supplied X-Forwarded-For chain
+  // and let a client spoof its own rate-limit identity.
   app.set("trust proxy", 1);
 
   app.get("/health", (_req, res) => {
@@ -44,35 +37,18 @@ export function buildServer(params: BuildServerParams): Express {
     res.status(ready ? 200 : 503).json({ status: ready ? "ready" : "not ready" });
   });
 
-  if (env.WHATSAPP_ENABLED) {
-    const apiClient = new WhatsAppApiClient({ accessToken: env.WHATSAPP_ACCESS_TOKEN!, phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID! });
-    const adapter = new WhatsAppChannelAdapter({ resolveMedia: (mediaId) => apiClient.downloadMediaAsDataUri(mediaId) });
-    app.use(
-      webhookRateLimiter(),
-      createWhatsAppWebhookRouter({
-        verifyToken: env.WHATSAPP_WEBHOOK_VERIFY_TOKEN!,
-        appSecret: env.WHATSAPP_APP_SECRET!,
-        adapter,
-        apiClient,
-        onMessage: params.onMessage,
-        onError: (err) => appLogger.error({ err }, "WhatsApp webhook processing failed"),
-      })
-    );
-  }
-
-  if (env.TELEGRAM_ENABLED) {
-    const apiClient = new TelegramApiClient({ botToken: env.TELEGRAM_BOT_TOKEN! });
-    const adapter = new TelegramChannelAdapter({ resolveMedia: (fileId, mimeType) => apiClient.downloadFileAsDataUri(fileId, mimeType) });
-    app.use(
-      webhookRateLimiter(),
-      createTelegramWebhookRouter({
-        secretToken: env.TELEGRAM_WEBHOOK_SECRET!,
-        adapter,
-        apiClient,
-        onMessage: params.onMessage,
-        onError: (err) => appLogger.error({ err }, "Telegram webhook processing failed"),
-      })
-    );
+  const mounted = mountChannels(app, {
+    env,
+    onMessage: params.onMessage,
+    onError: (channel, err) => appLogger.error({ err, channel }, "channel message processing failed"),
+    webChatDefaults: {
+      productName: "Sentinel Demo",
+        welcomeMessage: "Hi! This one chat window demos every GraceSoft Sentinel agent. Send /services to see them all.",
+    },
+  });
+  appLogger.info({ channels: mounted.map((m) => m.path) }, "channels mounted");
+  for (const chat of mounted.filter((m) => m.kind === "web-chat" && !m.gated)) {
+    appLogger.warn({ path: chat.path }, "web chat is open to anyone — set WEB_CHAT_ACCESS_TOKEN before exposing it publicly");
   }
 
   return app;

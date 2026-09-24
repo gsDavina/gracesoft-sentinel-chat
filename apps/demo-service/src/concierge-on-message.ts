@@ -24,7 +24,8 @@ export interface ConciergeOnMessageDeps {
   sessionTtlSeconds?: number;
 }
 
-function sessionIdFor(message: NormalizedMessage): string {
+/** Exported so the "delete my data" flow erases exactly the key this handler writes. */
+export function sessionIdFor(message: Pick<NormalizedMessage, "channel" | "senderId" | "businessChannelId">): string {
   return `concierge:${message.channel}:${message.senderId}`;
 }
 

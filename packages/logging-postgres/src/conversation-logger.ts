@@ -27,3 +27,14 @@ export interface ConversationLogger {
   logMessage(entry: ConversationMessageLogEntry): Promise<void>;
   logBooking(entry: BookingLogEntry): Promise<void>;
 }
+
+/**
+ * Erasure capability for the same records — kept separate from
+ * `ConversationLogger` so existing loggers (and test fakes) that only
+ * write don't have to grow a delete method. Used by a service's "delete my
+ * data" flow (`@gracesoft-sentinel/user-data-deletion`).
+ */
+export interface ConversationDataEraser {
+  /** Hard-deletes every message and booking row for these session ids; resolves to how many rows went from each table. */
+  deleteSessionData(sessionIds: string[]): Promise<{ messages: number; bookings: number }>;
+}

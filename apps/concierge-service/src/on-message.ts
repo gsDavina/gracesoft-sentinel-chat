@@ -39,7 +39,8 @@ export interface OnMessageDeps {
   rateLimiter?: RedisRateLimiter;
 }
 
-function sessionIdFor(message: NormalizedMessage): string {
+/** Exported so the "delete my data" flow erases exactly the key this handler writes. */
+export function sessionIdFor(message: Pick<NormalizedMessage, "channel" | "senderId" | "businessChannelId">): string {
   // Scoped by tenant too — otherwise the same customer messaging two
   // different businesses on a multi-tenant deployment would collide onto
   // one shared conversation state.

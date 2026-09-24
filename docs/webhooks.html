@@ -39,6 +39,10 @@
         <li><a href="webhooks.html#whatsapp" class="sub">WhatsApp</a></li>
         <li><a href="webhooks.html#telegram" class="sub">Telegram</a></li>
         <li><a href="webhooks.html#sms" class="sub">SMS (Twilio)</a></li>
+        <li><a href="webhooks.html#slack" class="sub">Slack</a></li>
+        <li><a href="webhooks.html#line" class="sub">LINE</a></li>
+        <li><a href="webhooks.html#web-chat" class="sub">Branded web chats</a></li>
+        <li><a href="webhooks.html#data-deletion" class="sub">Deleting your data</a></li>
         <li><a href="contracts.html">Data contracts</a></li>
         <li><a href="multi-tenant.html">Multi-tenant setup</a></li>
       </ul>
@@ -48,12 +52,14 @@
   <main>
     <div class="page-header">
       <h1>Webhooks &amp; endpoints</h1>
-      <p class="lede">Every HTTP route exposed by <code>concierge-service</code> and <code>cook-service</code>. Both services expose the identical set of routes — only the agent behind them differs.</p>
+      <p class="lede">Every HTTP route exposed by <code>concierge-service</code>, <code>cook-service</code>, <code>demo-service</code> and <code>assistant-service</code>. All four expose the identical set of routes — only the agent behind them differs. Channel mounting lives in one shared package, <code>@gracesoft-sentinel/webhook-host</code>.</p>
     </div>
 
-    <div class="callout">Every webhook route is rate limited to <strong>120 requests per minute per source IP</strong> (a floor against abuse/flooding — legitimate traffic here comes from the channel provider's own delivery servers, not directly from end users). Requests over the limit get <code>429</code>.</div>
+    <div class="callout"><strong>Every channel can run at once.</strong> Each enabled channel gets its own path — <code>/whatsapp/webhook</code>, <code>/telegram/webhook</code>, <code>/sms/webhook</code>, <code>/slack/webhook</code>, <code>/line/webhook</code>, plus the web chats at <code>/chat/gracesoft/</code> and <code>/chat/davdevs/</code> — so any combination of <code>*_ENABLED</code> flags works on one process. At least one must be on. Register the per-channel path with each platform for new setups.</div>
 
-    <div class="callout warn"><strong>Enable one messaging channel per service instance.</strong> Both routers currently mount at the same <code>/webhook</code> path on the same Express app, so running WhatsApp and Telegram simultaneously on one <code>concierge-service</code>/<code>cook-service</code> process is not yet a supported configuration — run separate instances (or separate ports behind your own reverse proxy) if you need more than one channel live at once.</div>
+    <div class="callout warn"><strong>Legacy <code>/webhook</code> still works.</strong> Before per-channel paths, every router claimed the same <code>/webhook</code> — so with WhatsApp and Telegram both enabled, WhatsApp's router rejected every Telegram delivery. The shared path is kept for already-registered webhooks (e.g. the live Railway deployments): each request is routed by the platform's own signature header (<code>X-Hub-Signature-256</code>, <code>X-Telegram-Bot-Api-Secret-Token</code>, <code>X-Twilio-Signature</code>, <code>X-Slack-Signature</code>, <code>X-Line-Signature</code>), and a POST carrying none of them gets <code>403</code>, as before. WhatsApp's <code>GET</code> handshake is answered there too.</div>
+
+    <div class="callout">Webhook routes are rate limited to <strong>120 requests per minute per source IP</strong> (a floor against flooding — webhook traffic comes from each platform's own servers). The web chats' message endpoint is limited to <strong>30 per minute per IP</strong>, since that traffic <em>is</em> end users. Over the limit: <code>429</code>.</div>
 
     <h2 id="health">Health &amp; readiness</h2>
 
@@ -74,14 +80,14 @@
     <p>Active only when <code>WHATSAPP_ENABLED=true</code>. Requires <code>WHATSAPP_PHONE_NUMBER_ID</code>, <code>WHATSAPP_ACCESS_TOKEN</code>, <code>WHATSAPP_APP_SECRET</code>, and <code>WHATSAPP_WEBHOOK_VERIFY_TOKEN</code>.</p>
 
     <div class="endpoint">
-      <div class="endpoint-title"><span class="method get">GET</span><span class="endpoint-path">/webhook</span></div>
+      <div class="endpoint-title"><span class="method get">GET</span><span class="endpoint-path">/whatsapp/webhook</span></div>
       <p>The one-time verification handshake Meta performs when you register the webhook URL in the WhatsApp Business Platform console. Meta calls this with:</p>
-      <pre><code>GET /webhook?hub.mode=subscribe&amp;hub.verify_token=YOUR_TOKEN&amp;hub.challenge=1234567</code></pre>
+      <pre><code>GET /whatsapp/webhook?hub.mode=subscribe&amp;hub.verify_token=YOUR_TOKEN&amp;hub.challenge=1234567</code></pre>
       <p>If <code>hub.mode=subscribe</code> and <code>hub.verify_token</code> matches your configured <code>WHATSAPP_WEBHOOK_VERIFY_TOKEN</code>, the server echoes <code>hub.challenge</code> back with <code>200</code>. Otherwise it returns <code>403</code>.</p>
     </div>
 
     <div class="endpoint">
-      <div class="endpoint-title"><span class="method post">POST</span><span class="endpoint-path">/webhook</span></div>
+      <div class="endpoint-title"><span class="method post">POST</span><span class="endpoint-path">/whatsapp/webhook</span></div>
       <p>Receives inbound message/status payloads from the WhatsApp Cloud API. Every request must carry a valid <code>X-Hub-Signature-256</code> header — HMAC-SHA256 of the <em>raw</em> request body, keyed by <code>WHATSAPP_APP_SECRET</code>, hex-encoded and prefixed <code>sha256=</code>. A missing or invalid signature gets <code>403</code>.</p>
       <p>On a valid signature, the server responds <code>200</code> immediately (Meta expects an ack within a few seconds and retries otherwise), then asynchronously: normalizes the message, runs it through the agent, formats the reply for WhatsApp, and sends it back via the Cloud API's own send-message endpoint. Status-update pings (delivery receipts etc., no <code>messages</code> array) are acknowledged and dropped — nothing is sent to the agent for those.</p>
     </div>
@@ -90,19 +96,58 @@
     <p>Active only when <code>TELEGRAM_ENABLED=true</code>. Requires <code>TELEGRAM_BOT_TOKEN</code> and <code>TELEGRAM_WEBHOOK_SECRET</code>. Unlike WhatsApp, Telegram has no GET handshake — you register the webhook URL yourself, once, via a direct call to Telegram's <code>setWebhook</code> API (passing your chosen secret token), rather than the channel initiating a handshake against you.</p>
 
     <div class="endpoint">
-      <div class="endpoint-title"><span class="method post">POST</span><span class="endpoint-path">/webhook</span></div>
+      <div class="endpoint-title"><span class="method post">POST</span><span class="endpoint-path">/telegram/webhook</span></div>
       <p>Receives Telegram <a href="https://core.telegram.org/bots/api#update">Update</a> objects. Every request must carry <code>X-Telegram-Bot-Api-Secret-Token</code> matching your configured <code>TELEGRAM_WEBHOOK_SECRET</code> exactly (constant-time compared) — a missing or mismatched header gets <code>403</code>.</p>
       <p>Responds <code>200</code> immediately, then asynchronously normalizes, runs the agent, and replies via the Bot API's <code>sendMessage</code>/<code>sendPhoto</code>. Updates with no <code>message</code> or <code>callback_query</code> (e.g. edited-message notifications) are acknowledged and dropped.</p>
     </div>
 
     <h2 id="sms">SMS / MMS (Twilio)</h2>
-    <p><code>channel-sms</code> implements the same <code>ChannelAdapter</code> contract as WhatsApp and Telegram and ships with its own webhook router, but — unlike the two above — it isn't pre-wired into <code>concierge-service</code>/<code>cook-service</code>'s <code>server.ts</code> today. Compose <code>createSmsWebhookRouter()</code> yourself following the same pattern the WhatsApp/Telegram branches use if you need SMS live.</p>
+    <p>Active only when <code>SMS_ENABLED=true</code>. Requires <code>TWILIO_ACCOUNT_SID</code>, <code>TWILIO_AUTH_TOKEN</code>, <code>TWILIO_FROM_NUMBER</code>, and <code>SMS_WEBHOOK_URL</code> — the exact public URL you configure in Twilio (its signature covers the URL, which can't be reliably reconstructed behind a proxy).</p>
 
     <div class="endpoint">
-      <div class="endpoint-title"><span class="method post">POST</span><span class="endpoint-path">/webhook</span></div>
-      <p>Receives Twilio's <code>application/x-www-form-urlencoded</code> inbound-message POST (not JSON). Every request must carry a valid <code>X-Twilio-Signature</code> header: HMAC-SHA1, base64-encoded, of the exact webhook URL with each POST parameter's key+value appended in sorted-key order, keyed by your Twilio auth token — <a href="https://www.twilio.com/docs/usage/webhooks/webhooks-security">Twilio's own signature scheme</a>. The exact externally-visible URL Twilio was configured with must be supplied to the router explicitly (it isn't reliably reconstructable from the request when the service sits behind a proxy).</p>
+      <div class="endpoint-title"><span class="method post">POST</span><span class="endpoint-path">/sms/webhook</span></div>
+      <p>Receives Twilio's <code>application/x-www-form-urlencoded</code> inbound-message POST (not JSON). Every request must carry a valid <code>X-Twilio-Signature</code> header: HMAC-SHA1, base64-encoded, of the exact webhook URL with each POST parameter's key+value appended in sorted-key order, keyed by your Twilio auth token — <a href="https://www.twilio.com/docs/usage/webhooks/webhooks-security">Twilio's own signature scheme</a>.</p>
       <p>Responds <code>200</code> with an empty <code>&lt;Response&gt;&lt;/Response&gt;</code> TwiML body immediately, then asynchronously normalizes and runs the agent. Quick replies degrade to a plain-text numbered list on this channel — the chatter replies with a number, resolved by the agent's existing free-text selection fallback.</p>
     </div>
+
+    <h2 id="slack">Slack</h2>
+    <p>Active only when <code>SLACK_ENABLED=true</code>. Requires <code>SLACK_BOT_TOKEN</code> (<code>xoxb-…</code>, scopes <code>chat:write</code>, plus <code>files:read</code> for attachments, <code>im:history</code> and <code>app_mentions:read</code>) and <code>SLACK_SIGNING_SECRET</code>. In the Slack app config, point <strong>both</strong> the Event Subscriptions Request URL and the Interactivity Request URL at the same path, and subscribe to <code>message.im</code> and <code>app_mention</code>.</p>
+
+    <div class="endpoint">
+      <div class="endpoint-title"><span class="method post">POST</span><span class="endpoint-path">/slack/webhook</span></div>
+      <p>Every request must carry <code>X-Slack-Signature</code> (<code>v0=</code> + HMAC-SHA256 of <code>v0:{timestamp}:{raw body}</code>, keyed by the signing secret) and an <code>X-Slack-Request-Timestamp</code> within 5 minutes — anything else gets <code>403</code>. Answers the one-time <code>url_verification</code> challenge. Otherwise acks <code>200</code> at once and processes asynchronously.</p>
+      <p>Direct messages and <code>@mentions</code> reach the agent; the app's own messages, edits and other subtypes are dropped, as are Slack's automatic retries (<code>X-Slack-Retry-Num</code>) so a slow ack never produces a double reply. Quick replies render as Block Kit buttons (tapped buttons arrive form-encoded on the same path). Each chatter is keyed by <code>{channel}:{user}</code>, so two people mentioning the app in one channel keep separate conversations.</p>
+    </div>
+
+    <h2 id="line">LINE</h2>
+    <p>Active only when <code>LINE_ENABLED=true</code>. Requires <code>LINE_CHANNEL_ACCESS_TOKEN</code> and <code>LINE_CHANNEL_SECRET</code> from the LINE Developers console. Set the channel's Webhook URL to this path and turn on "Use webhook".</p>
+
+    <div class="endpoint">
+      <div class="endpoint-title"><span class="method post">POST</span><span class="endpoint-path">/line/webhook</span></div>
+      <p>Every request must carry <code>X-Line-Signature</code> (base64 HMAC-SHA256 of the raw body, keyed by the channel secret); otherwise <code>403</code>. The console's "Verify" button (an empty <code>events</code> array) is acked like any delivery.</p>
+      <p>Acks <code>200</code> at once, then answers each text/media message and postback in the batch independently — standby-mode events and redeliveries are skipped. Replies use the free Reply API with the event's reply token, falling back to the Push API if the token has expired (a slow model answer can outlive its ~1-minute lifetime). Quick replies render as LINE quick-reply postback buttons (labels truncated to LINE's 20-character limit).</p>
+    </div>
+
+    <h2 id="web-chat">Branded web chats</h2>
+    <p><code>WEB_GRACESOFT_ENABLED=true</code> and/or <code>WEB_DAVDEVS_ENABLED=true</code> serve a browser chat themed to each brand, built on the <code>@gracesoft-sentinel/web-chat-kit</code> template (theme tokens → one shared layout). Set <code>WEB_CHAT_ACCESS_TOKEN</code> (8+ characters) before exposing either publicly — without it, anyone with the URL talks to a paid model, and the service logs a warning at boot. <code>WEB_CHAT_PRODUCT_NAME</code>/<code>WEB_CHAT_WELCOME_MESSAGE</code> optionally override the header and first message.</p>
+
+    <div class="endpoint">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="endpoint-path">/chat/gracesoft/ · /chat/davdevs/</span></div>
+      <p>The chat page (strict Content-Security-Policy: <code>script-src 'self'</code>, no inline script or style), plus <code>theme.css</code>, the template's <code>assets/</code> and the brand's <code>brand/</code> files beneath it. The bare path without a trailing slash redirects to it.</p>
+    </div>
+
+    <div class="endpoint">
+      <div class="endpoint-title"><span class="method post">POST</span><span class="endpoint-path">/chat/{brand}/api/messages</span></div>
+      <p>The page's only API. Unlike the webhooks, the reply comes back on the same response:</p>
+      <pre><code>POST { "sessionId": "…16-64 URL-safe chars…", "text"?: "…", "quickReplyId"?: "…", "image"?: "data:image/png;base64,…" }
+200  { "reply": { "text"?: "…", "quickReplies"?: [{ "id", "label" }], "images"?: ["https://…"] } }
+400  { "error": "invalid_message" }      401  { "error": "access_code_required" }
+413  { "error": "too_large" }            429  { "error": "rate_limited" }</code></pre>
+      <p><code>sessionId</code> is a random id the page keeps in <code>localStorage</code> and becomes the message's <code>senderId</code>. Images up to ~4 MB (PNG/JPEG/WebP/GIF). With an access code set, send <code>Authorization: Bearer &lt;code&gt;</code>.</p>
+    </div>
+
+    <h2 id="data-deletion">Deleting your data</h2>
+    <p>On every channel, sending <code>/deletemydata</code> (or "delete my data", <code>/forgetme</code>) starts a two-step erasure: the service replies naming exactly what will be deleted and asks for confirmation (a button, or typing <code>DELETE</code>) within 5 minutes; any other reply cancels it and is answered normally. On confirmation it hard-deletes the chatter's session state (Redis, or in-memory for <code>assistant-service</code>) and their rows in Postgres's <code>conversation_messages</code>/<code>bookings</code> tables. Appointments already on the business calendar are <em>not</em> removed — the chatter is told to cancel them first. A partial failure is reported as a failure, with a contact address, never as "done". The command itself is never forwarded to an agent or logged.</p>
 
     <div class="footer-nav">
       <span><span class="label">Previous</span><a href="getting-started.html">← Getting started</a></span>

@@ -1,6 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
+import { CHANNELS_DISABLED } from "@gracesoft-sentinel/webhook-host";
 import type { DemoServiceEnv } from "./env.js";
 import { buildServer } from "./server.js";
 import { createSilentTestLogger } from "./test-support.js";
@@ -19,6 +20,7 @@ const BASE_ENV: DemoServiceEnv = {
   ASSISTANT_MAX_TOOL_STEPS: 6,
   ASSISTANT_MODEL_TIMEOUT_MS: 15_000,
   ASSISTANT_MAX_TOKENS_PER_REQUEST: 1024,
+  ...CHANNELS_DISABLED,
   WHATSAPP_ENABLED: false,
   TELEGRAM_ENABLED: true,
   TELEGRAM_BOT_TOKEN: "t",

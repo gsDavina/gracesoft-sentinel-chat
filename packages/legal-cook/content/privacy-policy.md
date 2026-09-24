@@ -4,8 +4,8 @@
 
 # Sentinel Cook — Privacy Policy
 
-**Effective date:** 13 August 2026
-**Version:** 1.0.0
+**Effective date:** 24 September 2026
+**Version:** 1.1.0
 
 Sentinel Cook ("Cook", "we", "us") is an AI-powered chat assistant built by GraceSoft that identifies dishes from photos and generates recipes over WhatsApp and Telegram. This policy explains what we collect when you message Cook, why, and how to exercise your rights over that data.
 
@@ -49,6 +49,8 @@ Under Singapore's Personal Data Protection Act (PDPA), you can ask us what perso
 **Contact form:** https://gracesoft.dev/contact
 
 We'll respond to reasonable requests within a reasonable time.
+
+You can also delete your data yourself, straight from the chat: send **/deletemydata** and confirm when asked. That permanently deletes your conversation history and saved chat state with us. If anything can't be deleted automatically, you'll be told so and pointed to the contacts above.
 
 ## 7. Changes to this policy
 

@@ -24,10 +24,13 @@
   "devDependencies": {
     "@changesets/cli": "^2.27.11",
     "@gracesoft-sentinel/agent-concierge": "workspace:*",
+    "@gracesoft-sentinel/channel-line": "workspace:*",
+    "@gracesoft-sentinel/channel-slack": "workspace:*",
     "@gracesoft-sentinel/channel-telegram": "workspace:*",
     "@gracesoft-sentinel/channel-whatsapp": "workspace:*",
     "@gracesoft-sentinel/config-eslint": "workspace:*",
     "@gracesoft-sentinel/core": "workspace:*",
+    "@gracesoft-sentinel/web-chat-kit": "workspace:*",
     "dependency-cruiser": "^16.9.0",
     "eslint": "^9.18.0",
     "typescript": "^5.7.3",

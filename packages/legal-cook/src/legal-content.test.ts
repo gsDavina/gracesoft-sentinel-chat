@@ -5,8 +5,12 @@ describe("Cook privacy policy", () => {
   const doc = loadPrivacyPolicy();
 
   it("has an effective date and version parsed from the document", () => {
-    expect(doc.effectiveDate).toBe("13 August 2026");
-    expect(doc.version).toBe("1.0.0");
+    expect(doc.effectiveDate).toBe("24 September 2026");
+    expect(doc.version).toBe("1.1.0");
+  });
+
+  it("tells the chatter they can delete their own data from the chat", () => {
+    expect(doc.markdown).toContain("/deletemydata");
   });
 
   it("states what data is collected, including uploaded photos", () => {

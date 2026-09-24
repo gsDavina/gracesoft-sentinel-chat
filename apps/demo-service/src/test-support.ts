@@ -151,7 +151,7 @@ export class FakeRecipeSourceProvider implements RecipeSourceProvider {
 }
 
 export class FakeSessionStore implements SessionStore {
-  private readonly sessions = new Map<string, ConversationState>();
+  readonly sessions = new Map<string, ConversationState>();
 
   async get(sessionId: string): Promise<ConversationState | null> {
     return this.sessions.get(sessionId) ?? null;
@@ -173,5 +173,11 @@ export class FakeConversationLogger implements ConversationLogger {
   }
   async logBooking(entry: BookingLogEntry): Promise<void> {
     this.bookings.push(entry);
+  }
+  async deleteSessionData(sessionIds: string[]): Promise<{ messages: number; bookings: number }> {
+    const before = { messages: this.messages.length, bookings: this.bookings.length };
+    this.messages = this.messages.filter((m) => !sessionIds.includes(m.sessionId));
+    this.bookings = this.bookings.filter((b) => !sessionIds.includes(b.sessionId));
+    return { messages: before.messages - this.messages.length, bookings: before.bookings - this.bookings.length };
   }
 }

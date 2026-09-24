@@ -11,8 +11,8 @@ describe("renderLegalPage", () => {
   });
 
   it("renders the effective date and version from the document", () => {
-    expect(html).toContain("13 August 2026");
-    expect(html).toContain("1.0.0");
+    expect(html).toContain("24 September 2026");
+    expect(html).toContain("1.1.0");
   });
 
   it("renders the markdown content as HTML, not raw markdown", () => {

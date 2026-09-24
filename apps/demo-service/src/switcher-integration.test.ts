@@ -7,6 +7,8 @@ import { loadSnapshot, type QueryContext } from "@gracesoft-sentinel/agent-assis
 import { createConciergeOnMessageHandler } from "./concierge-on-message.js";
 import { createCookOnMessageHandler } from "./cook-on-message.js";
 import { createAssistantOnMessageHandler } from "./assistant-on-message.js";
+import { conversationLogEraser, sessionStoreEraser, withUserDataDeletion, CONFIRM_REPLY_ID } from "@gracesoft-sentinel/user-data-deletion";
+import { demoSessionIds } from "./composition.js";
 import {
   FakeAiProvider,
   FakeCalendarProvider,
@@ -71,7 +73,7 @@ function buildTestSwitcher(recipeSourceProvider?: FakeRecipeSourceProvider) {
     sessionStore,
   });
 
-  return { onMessage, aiProvider, conversationLogger };
+  return { onMessage, aiProvider, conversationLogger, sessionStore };
 }
 
 describe("demo-service — switching between real agent-concierge and agent-cook", () => {
@@ -165,5 +167,38 @@ describe("demo-service — switching between real agent-concierge and agent-cook
     const conciergeEntries = conversationLogger.messages.filter((m) => m.agent === "concierge");
     expect(cookEntries.length).toBeGreaterThan(0);
     expect(conciergeEntries).toHaveLength(0); // switching to cook never touched concierge's own on-message handler
+  });
+});
+
+describe("demo-service — /deletemydata across every agent", () => {
+  it("erases every session key and log row the real agents wrote for this chatter, and nothing of anyone else's", async () => {
+    const { onMessage: switcherOnMessage, sessionStore, conversationLogger } = buildTestSwitcher();
+    const onMessage = withUserDataDeletion(switcherOnMessage, {
+      erasers: [sessionStoreEraser(sessionStore, demoSessionIds), conversationLogEraser(conversationLogger, demoSessionIds)],
+      pendingStore: sessionStore,
+      contact: "hello@gracesoft.dev",
+    });
+
+    // Talk to all three agents so each writes its own session, plus the switcher's.
+    await onMessage(makeMessage({ text: "Do you sell coffee?" }));
+    await onMessage(makeMessage({ text: "/cook" }));
+    await onMessage(makeMessage({ text: "recipe for fried rice" }));
+    await onMessage(makeMessage({ text: "/assistant" }));
+    await onMessage(makeMessage({ text: "What's overdue?" }));
+    await onMessage(makeMessage({ senderId: "someone-else", text: "Do you sell coffee?" }));
+
+    const mine = [...sessionStore.sessions.keys()].filter((key) => key.endsWith(":chatter-1"));
+    expect(mine.length).toBeGreaterThanOrEqual(4);
+    expect(conversationLogger.messages.some((m) => m.sessionId.endsWith(":chatter-1"))).toBe(true);
+
+    await onMessage(makeMessage({ text: "/deletemydata" }));
+    const reply = await onMessage(makeMessage({ quickReplyId: CONFIRM_REPLY_ID, text: "Yes, delete my data" }));
+
+    expect(reply.text).toMatch(/has been deleted/);
+    // demoSessionIds covered every key format the real handlers actually wrote — none survived.
+    expect([...sessionStore.sessions.keys()].filter((key) => key.includes("chatter-1"))).toEqual([]);
+    expect(conversationLogger.messages.filter((m) => m.sessionId.endsWith(":chatter-1"))).toEqual([]);
+    expect([...sessionStore.sessions.keys()].some((key) => key.endsWith(":someone-else"))).toBe(true);
+    expect(conversationLogger.messages.some((m) => m.sessionId.endsWith(":someone-else"))).toBe(true);
   });
 });

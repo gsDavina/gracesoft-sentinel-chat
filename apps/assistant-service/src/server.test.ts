@@ -1,6 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
+import { CHANNELS_DISABLED } from "@gracesoft-sentinel/webhook-host";
 import type { AssistantServiceEnv } from "./env.js";
 import { buildServer } from "./server.js";
 import { createSilentTestLogger } from "./test-support.js";
@@ -16,6 +17,7 @@ const BASE_ENV: AssistantServiceEnv = {
   MAX_TOKENS_PER_REQUEST: 512,
   DAILY_MODEL_CALL_CAP: 500,
   RATE_LIMIT_PER_CHATTER_PER_MINUTE: 10,
+  ...CHANNELS_DISABLED,
   WHATSAPP_ENABLED: false,
   TELEGRAM_ENABLED: true,
   TELEGRAM_BOT_TOKEN: "t",
@@ -87,5 +89,35 @@ describe("buildServer — rate limiting", () => {
       lastStatus = res.status;
     }
     expect(lastStatus).toBe(429);
+  });
+});
+
+describe("buildServer — every channel side by side", () => {
+  it("mounts each webhook channel on its own path and serves the branded web chats", async () => {
+    const baseUrl = await listen({
+      ...BASE_ENV,
+      WHATSAPP_ENABLED: true,
+      WHATSAPP_PHONE_NUMBER_ID: "pn",
+      WHATSAPP_ACCESS_TOKEN: "tok",
+      WHATSAPP_APP_SECRET: "secret",
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: "verify",
+      WEB_GRACESOFT_ENABLED: true,
+      WEB_DAVDEVS_ENABLED: true,
+    });
+    // Unsigned requests are refused by each channel's own router — proving each is mounted where expected.
+    expect((await fetch(`${baseUrl}/telegram/webhook`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(403);
+    expect((await fetch(`${baseUrl}/whatsapp/webhook`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(403);
+    expect((await fetch(`${baseUrl}/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=verify&hub.challenge=ok`)).status).toBe(200);
+
+    for (const brand of ["gracesoft", "davdevs"]) {
+      const page = await fetch(`${baseUrl}/chat/${brand}/`);
+      expect(page.status).toBe(200);
+      const reply = await fetch(`${baseUrl}/chat/${brand}/api/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: "abcdefabcdefabcdef", text: "hi" }),
+      });
+      expect(await reply.json()).toEqual({ reply: { text: "unused" } });
+    }
   });
 });

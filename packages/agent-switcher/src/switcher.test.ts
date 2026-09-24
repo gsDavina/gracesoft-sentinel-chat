@@ -125,3 +125,55 @@ describe("createAgentSwitcher", () => {
     ).toThrow(/does-not-exist/);
   });
 });
+
+describe("createAgentSwitcher — service map", () => {
+  function setup() {
+    const concierge = { ...fakeAgent("concierge", "Sentinel Concierge", ["/concierge", "concierge"]), description: "FAQs and bookings" };
+    const cook = { ...fakeAgent("cook", "Sentinel Cook", ["/cook", "cook"]), description: "Recipes from a dish photo" };
+    const sessionStore = new FakeSessionStore();
+    const onMessage = createAgentSwitcher({
+      agents: [concierge, cook],
+      defaultAgent: "concierge",
+      sessionStore,
+      serviceMapFooter: "Send /deletemydata to erase your data.",
+    });
+    return { concierge, cook, onMessage };
+  }
+
+  it("lists every agent, its description and command, marks the active one, and offers a button per agent", async () => {
+    const { onMessage, concierge, cook } = setup();
+    const response = await onMessage(makeMessage({ text: "/services" }));
+    expect(response.text).toContain("• Sentinel Concierge (you're here) — FAQs and bookings. Say \"/concierge\".");
+    expect(response.text).toContain("• Sentinel Cook — Recipes from a dish photo. Say \"/cook\".");
+    expect(response.text).toContain("Send /services any time");
+    expect(response.text).toContain("Send /deletemydata to erase your data.");
+    expect(response.quickReplies).toEqual([
+      { id: "/concierge", label: "Sentinel Concierge" },
+      { id: "/cook", label: "Sentinel Cook" },
+    ]);
+    expect(concierge.calls).toHaveLength(0);
+    expect(cook.calls).toHaveLength(0);
+  });
+
+  it("follows the active agent after a switch", async () => {
+    const { onMessage } = setup();
+    await onMessage(makeMessage({ text: "/cook" }));
+    const response = await onMessage(makeMessage({ text: "Menu" }));
+    expect(response.text).toContain("Sentinel Cook (you're here)");
+    expect(response.text).not.toContain("Sentinel Concierge (you're here)");
+  });
+
+  it("switches when a service-map button is tapped, even on channels that put the label (not the id) in text", async () => {
+    const { onMessage, cook } = setup();
+    const response = await onMessage(makeMessage({ text: "Sentinel Cook", quickReplyId: "/cook" }));
+    expect(response.text).toContain("Switched to Sentinel Cook");
+    await onMessage(makeMessage({ text: "eggs?" }));
+    expect(cook.calls).toHaveLength(1);
+  });
+
+  it("can be turned off", async () => {
+    const concierge = fakeAgent("concierge", "Sentinel Concierge", ["/concierge"]);
+    const onMessage = createAgentSwitcher({ agents: [concierge], defaultAgent: "concierge", sessionStore: new FakeSessionStore(), serviceMapTriggers: [] });
+    expect((await onMessage(makeMessage({ text: "/services" }))).text).toBe("concierge-reply");
+  });
+});

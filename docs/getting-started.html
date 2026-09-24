@@ -77,9 +77,13 @@ cp apps/cook-service/.env.example apps/cook-service/.env</code></pre>
         <tr><td><code>BUSINESS_CONFIGS_DIR</code></td><td>Yes, unless <code>BUSINESS_CONFIG_PATH</code> is set</td><td>Multi-tenant mode</td></tr>
         <tr><td><code>WHATSAPP_ENABLED</code> + its four vars</td><td>Conditional</td><td>See <a href="webhooks.html#whatsapp">Webhooks — WhatsApp</a></td></tr>
         <tr><td><code>TELEGRAM_ENABLED</code> + its two vars</td><td>Conditional</td><td>See <a href="webhooks.html#telegram">Webhooks — Telegram</a></td></tr>
+        <tr><td><code>SMS_ENABLED</code> + its four vars</td><td>Conditional</td><td>See <a href="webhooks.html#sms">Webhooks — SMS</a></td></tr>
+        <tr><td><code>SLACK_ENABLED</code> + its two vars</td><td>Conditional</td><td>See <a href="webhooks.html#slack">Webhooks — Slack</a></td></tr>
+        <tr><td><code>LINE_ENABLED</code> + its two vars</td><td>Conditional</td><td>See <a href="webhooks.html#line">Webhooks — LINE</a></td></tr>
+        <tr><td><code>WEB_GRACESOFT_ENABLED</code>, <code>WEB_DAVDEVS_ENABLED</code>, <code>WEB_CHAT_ACCESS_TOKEN</code></td><td>Conditional</td><td>See <a href="webhooks.html#web-chat">Webhooks — Branded web chats</a></td></tr>
       </tbody>
     </table>
-    <div class="callout">At least one of <code>WHATSAPP_ENABLED</code>/<code>TELEGRAM_ENABLED</code> must be <code>true</code>, and at least one of <code>BUSINESS_CONFIG_PATH</code>/<code>BUSINESS_CONFIGS_DIR</code> must be set — startup fails fast otherwise.</div>
+    <div class="callout">At least one channel flag (<code>WHATSAPP_ENABLED</code>, <code>TELEGRAM_ENABLED</code>, <code>SMS_ENABLED</code>, <code>SLACK_ENABLED</code>, <code>LINE_ENABLED</code>, <code>WEB_GRACESOFT_ENABLED</code>, <code>WEB_DAVDEVS_ENABLED</code>) must be <code>true</code> — any combination can run at once, and at least one of <code>BUSINESS_CONFIG_PATH</code>/<code>BUSINESS_CONFIGS_DIR</code> must be set — startup fails fast otherwise.</div>
 
     <h3>cook-service</h3>
     <table>
@@ -88,7 +92,7 @@ cp apps/cook-service/.env.example apps/cook-service/.env</code></pre>
         <tr><td><code>PORT</code></td><td>No — default <code>3001</code></td><td></td></tr>
         <tr><td><code>OPENAI_API_KEY</code>, <code>OPENAI_MODEL</code>, <code>OPENAI_VISION_MODEL</code></td><td>Key required, models optional</td><td></td></tr>
         <tr><td><code>REDIS_URL</code>, <code>DATABASE_URL</code></td><td>Yes</td><td></td></tr>
-        <tr><td><code>WHATSAPP_ENABLED</code> / <code>TELEGRAM_ENABLED</code> + their vars</td><td>Conditional, at least one</td><td>Same rules as concierge-service</td></tr>
+        <tr><td>Channel flags (<code>WHATSAPP_ENABLED</code>, <code>TELEGRAM_ENABLED</code>, <code>SMS_ENABLED</code>, <code>SLACK_ENABLED</code>, <code>LINE_ENABLED</code>, <code>WEB_*_ENABLED</code>) + their vars</td><td>Conditional, at least one</td><td>Same rules as concierge-service</td></tr>
         <tr><td><code>PINECONE_INDEX_NAME</code></td><td>No — opt-in</td><td>"Mother's Day Edition": personal recipe retrieval via RAG, queried from Pinecone</td></tr>
         <tr><td><code>PINECONE_API_KEY</code></td><td>Required only if <code>PINECONE_INDEX_NAME</code> is set</td><td></td></tr>
         <tr><td><code>PINECONE_NAMESPACE</code></td><td>No</td><td>Optional — isolates recipe vectors within a shared index</td></tr>

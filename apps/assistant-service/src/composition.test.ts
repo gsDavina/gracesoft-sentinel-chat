@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CHANNELS_DISABLED } from "@gracesoft-sentinel/webhook-host";
 import { buildComposition } from "./composition.js";
 import type { AssistantServiceEnv } from "./env.js";
 import { FIXTURE_SNAPSHOT_DIR } from "./test-support.js";
@@ -14,6 +15,7 @@ const BASE_ENV: AssistantServiceEnv = {
   MAX_TOKENS_PER_REQUEST: 512,
   DAILY_MODEL_CALL_CAP: 500,
   RATE_LIMIT_PER_CHATTER_PER_MINUTE: 10,
+  ...CHANNELS_DISABLED,
   WHATSAPP_ENABLED: false,
   TELEGRAM_ENABLED: true,
   TELEGRAM_BOT_TOKEN: "t",

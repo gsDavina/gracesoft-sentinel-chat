@@ -1,17 +1,5 @@
 import { z } from "zod";
-
-/**
- * `z.coerce.boolean()` is just `Boolean(value)` under the hood — for a
- * string env var, that makes the literal string "false" coerce to `true`
- * (any non-empty string is truthy), silently ignoring an explicit
- * WHATSAPP_ENABLED=false. Parse the two expected string values explicitly
- * instead, so a real "false" is actually respected and anything else is a
- * clear validation error rather than a silent yes.
- */
-const booleanFromEnvString = z
-  .enum(["true", "false"])
-  .default("false")
-  .transform((value) => value === "true");
+import { channelEnvShape, refineChannelEnv } from "@gracesoft-sentinel/webhook-host";
 
 /**
  * Env validation via Zod, fails fast at startup with a clear error rather
@@ -51,30 +39,11 @@ export const ConciergeServiceEnvSchema = z
      */
     DEFAULT_MAX_BOOKING_HORIZON_DAYS: z.coerce.number().int().positive().optional(),
 
-    WHATSAPP_ENABLED: booleanFromEnvString,
-    WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
-    WHATSAPP_ACCESS_TOKEN: z.string().optional(),
-    WHATSAPP_APP_SECRET: z.string().optional(),
-    WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
-
-    TELEGRAM_ENABLED: booleanFromEnvString,
-    TELEGRAM_BOT_TOKEN: z.string().optional(),
-    TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
+    /** Every channel's flags and credentials — WhatsApp, Telegram, SMS, Slack, LINE and the two branded web chats; any number can be on at once. */
+    ...channelEnvShape,
   })
   .superRefine((env, ctx) => {
-    if (env.WHATSAPP_ENABLED) {
-      for (const key of ["WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_WEBHOOK_VERIFY_TOKEN"] as const) {
-        if (!env[key]) ctx.addIssue({ code: "custom", path: [key], message: `${key} is required when WHATSAPP_ENABLED=true` });
-      }
-    }
-    if (env.TELEGRAM_ENABLED) {
-      for (const key of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET"] as const) {
-        if (!env[key]) ctx.addIssue({ code: "custom", path: [key], message: `${key} is required when TELEGRAM_ENABLED=true` });
-      }
-    }
-    if (!env.WHATSAPP_ENABLED && !env.TELEGRAM_ENABLED) {
-      ctx.addIssue({ code: "custom", path: ["WHATSAPP_ENABLED"], message: "At least one of WHATSAPP_ENABLED or TELEGRAM_ENABLED must be true" });
-    }
+    refineChannelEnv(env, ctx);
     if (!env.BUSINESS_CONFIG_PATH && !env.BUSINESS_CONFIGS_DIR) {
       ctx.addIssue({
         code: "custom",

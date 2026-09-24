@@ -24,7 +24,8 @@ const NO_TEXT_MESSAGE = "Ask me about GraceSoft Desk or Skylight — hours, bill
 const RATE_LIMITED_MESSAGE = "You're sending messages a bit quickly — please wait a moment and try again.";
 const SPEND_CAP_MESSAGE = "This demo has hit its usage limit for today — please try again tomorrow.";
 
-function sessionIdFor(message: NormalizedMessage): string {
+/** Exported so the "delete my data" flow erases exactly the key this handler writes. */
+export function sessionIdFor(message: Pick<NormalizedMessage, "channel" | "senderId" | "businessChannelId">): string {
   return `assistant:${message.channel}:${message.senderId}`;
 }
 

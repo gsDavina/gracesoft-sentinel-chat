@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CHANNELS_DISABLED } from "@gracesoft-sentinel/webhook-host";
 import { buildComposition } from "./composition.js";
 import type { CookServiceEnv } from "./env.js";
 
@@ -16,6 +17,7 @@ describe("buildComposition — cook-service", () => {
     OPENAI_VISION_MODEL: undefined,
     REDIS_URL: "redis://localhost:6379",
     DATABASE_URL: "postgres://localhost:5432/db",
+    ...CHANNELS_DISABLED,
     WHATSAPP_ENABLED: false,
     TELEGRAM_ENABLED: true,
     TELEGRAM_BOT_TOKEN: "t",

@@ -14,6 +14,12 @@ importers:
       '@gracesoft-sentinel/agent-concierge':
         specifier: workspace:*
         version: link:packages/agent-concierge
+      '@gracesoft-sentinel/channel-line':
+        specifier: workspace:*
+        version: link:packages/channel-line
+      '@gracesoft-sentinel/channel-slack':
+        specifier: workspace:*
+        version: link:packages/channel-slack
       '@gracesoft-sentinel/channel-telegram':
         specifier: workspace:*
         version: link:packages/channel-telegram
@@ -26,6 +32,9 @@ importers:
       '@gracesoft-sentinel/core':
         specifier: workspace:*
         version: link:packages/core
+      '@gracesoft-sentinel/web-chat-kit':
+        specifier: workspace:*
+        version: link:packages/web-chat-kit
       dependency-cruiser:
         specifier: ^16.9.0
         version: 16.10.4
@@ -44,12 +53,6 @@ importers:
       '@gracesoft-sentinel/agent-assistant':
         specifier: workspace:*
         version: link:../../packages/agent-assistant
-      '@gracesoft-sentinel/channel-telegram':
-        specifier: workspace:*
-        version: link:../../packages/channel-telegram
-      '@gracesoft-sentinel/channel-whatsapp':
-        specifier: workspace:*
-        version: link:../../packages/channel-whatsapp
       '@gracesoft-sentinel/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -65,12 +68,15 @@ importers:
       '@gracesoft-sentinel/provider-snapshot-pinecone':
         specifier: workspace:*
         version: link:../../packages/provider-snapshot-pinecone
+      '@gracesoft-sentinel/user-data-deletion':
+        specifier: workspace:*
+        version: link:../../packages/user-data-deletion
+      '@gracesoft-sentinel/webhook-host':
+        specifier: workspace:*
+        version: link:../../packages/webhook-host
       express:
         specifier: ^4.19.2
         version: 4.22.2
-      express-rate-limit:
-        specifier: ^7.4.1
-        version: 7.5.1(express@4.22.2)
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -93,12 +99,6 @@ importers:
       '@gracesoft-sentinel/agent-concierge':
         specifier: workspace:*
         version: link:../../packages/agent-concierge
-      '@gracesoft-sentinel/channel-telegram':
-        specifier: workspace:*
-        version: link:../../packages/channel-telegram
-      '@gracesoft-sentinel/channel-whatsapp':
-        specifier: workspace:*
-        version: link:../../packages/channel-whatsapp
       '@gracesoft-sentinel/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -117,12 +117,15 @@ importers:
       '@gracesoft-sentinel/provider-session-redis':
         specifier: workspace:*
         version: link:../../packages/provider-session-redis
+      '@gracesoft-sentinel/user-data-deletion':
+        specifier: workspace:*
+        version: link:../../packages/user-data-deletion
+      '@gracesoft-sentinel/webhook-host':
+        specifier: workspace:*
+        version: link:../../packages/webhook-host
       express:
         specifier: ^4.19.2
         version: 4.22.2
-      express-rate-limit:
-        specifier: ^7.4.1
-        version: 7.5.1(express@4.22.2)
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -145,12 +148,6 @@ importers:
       '@gracesoft-sentinel/agent-cook':
         specifier: workspace:*
         version: link:../../packages/agent-cook
-      '@gracesoft-sentinel/channel-telegram':
-        specifier: workspace:*
-        version: link:../../packages/channel-telegram
-      '@gracesoft-sentinel/channel-whatsapp':
-        specifier: workspace:*
-        version: link:../../packages/channel-whatsapp
       '@gracesoft-sentinel/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -169,12 +166,15 @@ importers:
       '@gracesoft-sentinel/provider-session-redis':
         specifier: workspace:*
         version: link:../../packages/provider-session-redis
+      '@gracesoft-sentinel/user-data-deletion':
+        specifier: workspace:*
+        version: link:../../packages/user-data-deletion
+      '@gracesoft-sentinel/webhook-host':
+        specifier: workspace:*
+        version: link:../../packages/webhook-host
       express:
         specifier: ^4.19.2
         version: 4.22.2
-      express-rate-limit:
-        specifier: ^7.4.1
-        version: 7.5.1(express@4.22.2)
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -206,12 +206,6 @@ importers:
       '@gracesoft-sentinel/agent-switcher':
         specifier: workspace:*
         version: link:../../packages/agent-switcher
-      '@gracesoft-sentinel/channel-telegram':
-        specifier: workspace:*
-        version: link:../../packages/channel-telegram
-      '@gracesoft-sentinel/channel-whatsapp':
-        specifier: workspace:*
-        version: link:../../packages/channel-whatsapp
       '@gracesoft-sentinel/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -236,12 +230,15 @@ importers:
       '@gracesoft-sentinel/provider-snapshot-pinecone':
         specifier: workspace:*
         version: link:../../packages/provider-snapshot-pinecone
+      '@gracesoft-sentinel/user-data-deletion':
+        specifier: workspace:*
+        version: link:../../packages/user-data-deletion
+      '@gracesoft-sentinel/webhook-host':
+        specifier: workspace:*
+        version: link:../../packages/webhook-host
       express:
         specifier: ^4.19.2
         version: 4.22.2
-      express-rate-limit:
-        specifier: ^7.4.1
-        version: 7.5.1(express@4.22.2)
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -363,6 +360,50 @@ importers:
         specifier: ^3.0.4
         version: 3.2.7(@types/node@18.19.130)
 
+  packages/channel-line:
+    dependencies:
+      '@gracesoft-sentinel/core':
+        specifier: workspace:*
+        version: link:../core
+      express:
+        specifier: ^4.19.2
+        version: 4.22.2
+    devDependencies:
+      '@gracesoft-sentinel/config-tsconfig':
+        specifier: workspace:*
+        version: link:../config-tsconfig
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.4
+        version: 3.2.7(@types/node@18.19.130)
+
+  packages/channel-slack:
+    dependencies:
+      '@gracesoft-sentinel/core':
+        specifier: workspace:*
+        version: link:../core
+      express:
+        specifier: ^4.19.2
+        version: 4.22.2
+    devDependencies:
+      '@gracesoft-sentinel/config-tsconfig':
+        specifier: workspace:*
+        version: link:../config-tsconfig
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.4
+        version: 3.2.7(@types/node@18.19.130)
+
   packages/channel-sms:
     dependencies:
       '@gracesoft-sentinel/core':
@@ -390,6 +431,56 @@ importers:
       '@gracesoft-sentinel/core':
         specifier: workspace:*
         version: link:../core
+      express:
+        specifier: ^4.19.2
+        version: 4.22.2
+    devDependencies:
+      '@gracesoft-sentinel/config-tsconfig':
+        specifier: workspace:*
+        version: link:../config-tsconfig
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.4
+        version: 3.2.7(@types/node@18.19.130)
+
+  packages/channel-web-davdevs:
+    dependencies:
+      '@gracesoft-sentinel/core':
+        specifier: workspace:*
+        version: link:../core
+      '@gracesoft-sentinel/web-chat-kit':
+        specifier: workspace:*
+        version: link:../web-chat-kit
+      express:
+        specifier: ^4.19.2
+        version: 4.22.2
+    devDependencies:
+      '@gracesoft-sentinel/config-tsconfig':
+        specifier: workspace:*
+        version: link:../config-tsconfig
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.4
+        version: 3.2.7(@types/node@18.19.130)
+
+  packages/channel-web-gracesoft:
+    dependencies:
+      '@gracesoft-sentinel/core':
+        specifier: workspace:*
+        version: link:../core
+      '@gracesoft-sentinel/web-chat-kit':
+        specifier: workspace:*
+        version: link:../web-chat-kit
       express:
         specifier: ^4.19.2
         version: 4.22.2
@@ -690,6 +781,96 @@ importers:
       '@gracesoft-sentinel/config-tsconfig':
         specifier: workspace:*
         version: link:../config-tsconfig
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.4
+        version: 3.2.7(@types/node@18.19.130)
+
+  packages/user-data-deletion:
+    dependencies:
+      '@gracesoft-sentinel/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@gracesoft-sentinel/config-tsconfig':
+        specifier: workspace:*
+        version: link:../config-tsconfig
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.4
+        version: 3.2.7(@types/node@18.19.130)
+
+  packages/web-chat-kit:
+    dependencies:
+      '@gracesoft-sentinel/core':
+        specifier: workspace:*
+        version: link:../core
+      express:
+        specifier: ^4.19.2
+        version: 4.22.2
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@gracesoft-sentinel/config-tsconfig':
+        specifier: workspace:*
+        version: link:../config-tsconfig
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.4
+        version: 3.2.7(@types/node@18.19.130)
+
+  packages/webhook-host:
+    dependencies:
+      '@gracesoft-sentinel/channel-line':
+        specifier: workspace:*
+        version: link:../channel-line
+      '@gracesoft-sentinel/channel-slack':
+        specifier: workspace:*
+        version: link:../channel-slack
+      '@gracesoft-sentinel/channel-sms':
+        specifier: workspace:*
+        version: link:../channel-sms
+      '@gracesoft-sentinel/channel-telegram':
+        specifier: workspace:*
+        version: link:../channel-telegram
+      '@gracesoft-sentinel/channel-web-davdevs':
+        specifier: workspace:*
+        version: link:../channel-web-davdevs
+      '@gracesoft-sentinel/channel-web-gracesoft':
+        specifier: workspace:*
+        version: link:../channel-web-gracesoft
+      '@gracesoft-sentinel/channel-whatsapp':
+        specifier: workspace:*
+        version: link:../channel-whatsapp
+      '@gracesoft-sentinel/core':
+        specifier: workspace:*
+        version: link:../core
+      express:
+        specifier: ^4.19.2
+        version: 4.22.2
+      express-rate-limit:
+        specifier: ^7.4.1
+        version: 7.5.1(express@4.22.2)
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@gracesoft-sentinel/config-tsconfig':
+        specifier: workspace:*
+        version: link:../config-tsconfig
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
       typescript:
         specifier: ^5.7.3
         version: 5.9.3

@@ -31,7 +31,7 @@ describe("loadEnv", () => {
   });
 
   it("throws when no channel is enabled", () => {
-    expect(() => loadEnv({ ...BASE_ENV } as unknown as NodeJS.ProcessEnv)).toThrow(/WHATSAPP_ENABLED or TELEGRAM_ENABLED/);
+    expect(() => loadEnv({ ...BASE_ENV } as unknown as NodeJS.ProcessEnv)).toThrow(/At least one channel must be enabled/);
   });
 
   it("throws when WHATSAPP_ENABLED is true but its required vars are missing", () => {

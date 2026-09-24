@@ -1,9 +1,7 @@
 import express, { type Express } from "express";
-import { rateLimit } from "express-rate-limit";
-import { TelegramApiClient, TelegramChannelAdapter, createTelegramWebhookRouter } from "@gracesoft-sentinel/channel-telegram";
-import { WhatsAppApiClient, WhatsAppChannelAdapter, createWhatsAppWebhookRouter } from "@gracesoft-sentinel/channel-whatsapp";
 import type { NormalizedMessage, NormalizedResponse } from "@gracesoft-sentinel/core";
 import type { Logger } from "@gracesoft-sentinel/logging";
+import { mountChannels } from "@gracesoft-sentinel/webhook-host";
 import type { ConciergeServiceEnv } from "./env.js";
 
 export interface BuildServerParams {
@@ -14,23 +12,12 @@ export interface BuildServerParams {
 }
 
 /**
- * Rate limits the webhook endpoint by source IP — a floor against abuse/
- * flooding, not per-chatter fairness (legitimate traffic here comes from
- * Meta's/Telegram's own delivery servers, not directly from end users).
- */
-function webhookRateLimiter() {
-  return rateLimit({
-    windowMs: 60_000,
-    limit: 120,
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
-}
-
-/**
  * Composes the deployable HTTP surface: health/readiness endpoints plus
- * whichever channel webhook routers are enabled — env-driven, per
- * Milestone 8's goal, not hardcoded to a fixed set of channels.
+ * every enabled channel, all running side by side — each webhook channel
+ * at `/{channel}/webhook` (plus the legacy shared `/webhook`, dispatched
+ * by signature header, so already-registered webhook URLs keep working),
+ * and the branded web chats at `/chat/gracesoft/` and `/chat/davdevs/`.
+ * See `@gracesoft-sentinel/webhook-host` for the routing and rate limits.
  */
 export function buildServer(params: BuildServerParams): Express {
   const { env, appLogger } = params;
@@ -50,35 +37,17 @@ export function buildServer(params: BuildServerParams): Express {
     res.status(ready ? 200 : 503).json({ status: ready ? "ready" : "not ready" });
   });
 
-  if (env.WHATSAPP_ENABLED) {
-    const apiClient = new WhatsAppApiClient({ accessToken: env.WHATSAPP_ACCESS_TOKEN!, phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID! });
-    const adapter = new WhatsAppChannelAdapter({ resolveMedia: (mediaId) => apiClient.downloadMediaAsDataUri(mediaId) });
-    app.use(
-      webhookRateLimiter(),
-      createWhatsAppWebhookRouter({
-        verifyToken: env.WHATSAPP_WEBHOOK_VERIFY_TOKEN!,
-        appSecret: env.WHATSAPP_APP_SECRET!,
-        adapter,
-        apiClient,
-        onMessage: params.onMessage,
-        onError: (err) => appLogger.error({ err }, "WhatsApp webhook processing failed"),
-      })
-    );
-  }
-
-  if (env.TELEGRAM_ENABLED) {
-    const apiClient = new TelegramApiClient({ botToken: env.TELEGRAM_BOT_TOKEN! });
-    const adapter = new TelegramChannelAdapter({ resolveMedia: (fileId, mimeType) => apiClient.downloadFileAsDataUri(fileId, mimeType) });
-    app.use(
-      webhookRateLimiter(),
-      createTelegramWebhookRouter({
-        secretToken: env.TELEGRAM_WEBHOOK_SECRET!,
-        adapter,
-        apiClient,
-        onMessage: params.onMessage,
-        onError: (err) => appLogger.error({ err }, "Telegram webhook processing failed"),
-      })
-    );
+  const mounted = mountChannels(app, {
+    env,
+    onMessage: params.onMessage,
+    onError: (channel, err) => appLogger.error({ err, channel }, "channel message processing failed"),
+    webChatDefaults: {
+      productName: "Sentinel Concierge",
+    },
+  });
+  appLogger.info({ channels: mounted.map((m) => m.path) }, "channels mounted");
+  for (const chat of mounted.filter((m) => m.kind === "web-chat" && !m.gated)) {
+    appLogger.warn({ path: chat.path }, "web chat is open to anyone — set WEB_CHAT_ACCESS_TOKEN before exposing it publicly");
   }
 
   return app;

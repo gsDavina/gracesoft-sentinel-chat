@@ -1,6 +1,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { CHANNELS_DISABLED } from "@gracesoft-sentinel/webhook-host";
 import { buildComposition } from "./composition.js";
 import type { DemoServiceEnv } from "./env.js";
 
@@ -29,6 +30,7 @@ describe("buildComposition — demo-service", () => {
     ASSISTANT_MAX_TOOL_STEPS: 6,
     ASSISTANT_MODEL_TIMEOUT_MS: 15_000,
     ASSISTANT_MAX_TOKENS_PER_REQUEST: 1024,
+    ...CHANNELS_DISABLED,
     WHATSAPP_ENABLED: false,
     TELEGRAM_ENABLED: true,
     TELEGRAM_BOT_TOKEN: "t",

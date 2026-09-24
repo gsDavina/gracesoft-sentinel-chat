@@ -25,6 +25,9 @@ import type {
 import { handleMessage, type FaqGroundingBlueprint } from "@gracesoft-sentinel/agent-concierge";
 import { WhatsAppChannelAdapter } from "@gracesoft-sentinel/channel-whatsapp";
 import { TelegramChannelAdapter } from "@gracesoft-sentinel/channel-telegram";
+import { SlackChannelAdapter } from "@gracesoft-sentinel/channel-slack";
+import { LineChannelAdapter } from "@gracesoft-sentinel/channel-line";
+import { WebChatChannelAdapter } from "@gracesoft-sentinel/web-chat-kit";
 
 /**
  * Proves the "platform-agnostic" claim end to end: the same booking
@@ -215,5 +218,43 @@ describe("cross-channel parity: WhatsApp vs Telegram through agent-concierge", (
     const whatsappLabels = whatsappOutput.interactive.action.buttons.map((b) => b.reply.title);
     const telegramLabels = telegramOutput.body.reply_markup.inline_keyboard.map((row) => row[0]!.text);
     expect(whatsappLabels).toEqual(telegramLabels);
+  });
+});
+
+describe("cross-channel parity: the newer channels (Slack, LINE, web chat)", () => {
+  const offer = {
+    text: "Here are the next available slots:",
+    quickReplies: [
+      { id: "slot-1", label: "Mon, 4 May, 9:00am" },
+      { id: "slot-2", label: "Mon, 4 May, 9:30am" },
+    ],
+  };
+
+  it("each renders the same slot offer with every slot id intact", () => {
+    const slack = new SlackChannelAdapter().formatOutbound(offer, { recipientId: "D1:U1" });
+    const slackActions = slack.blocks?.find((b) => b.type === "actions");
+    expect(slackActions && "elements" in slackActions ? slackActions.elements.map((e) => e.value) : []).toEqual(["slot-1", "slot-2"]);
+
+    const line = new LineChannelAdapter().formatOutbound(offer, { recipientId: "U1" });
+    expect(line.messages[0]!.quickReply!.items.map((i) => i.action.data)).toEqual(["slot-1", "slot-2"]);
+
+    const web = new WebChatChannelAdapter({ channel: "web-gracesoft" }).formatOutbound(offer, { recipientId: "abcdefabcdefabcdef" });
+    expect(web.quickReplies?.map((q) => q.id)).toEqual(["slot-1", "slot-2"]);
+  });
+
+  it("a tapped slot comes back as the same quickReplyId on every channel — what agent-concierge keys its booking on", async () => {
+    const slack = await new SlackChannelAdapter().parseInbound({
+      type: "block_actions",
+      user: { id: "U1" },
+      channel: { id: "D1" },
+      actions: [{ action_id: "quick_reply_1", value: "slot-2", text: { type: "plain_text", text: "Mon, 4 May, 9:30am" } }],
+    });
+    const line = await new LineChannelAdapter().parseInbound({
+      destination: "Ubot",
+      event: { type: "postback", timestamp: 1746064800000, source: { type: "user", userId: "U1" }, postback: { data: "slot-2" } },
+    });
+    const web = new WebChatChannelAdapter({ channel: "web-davdevs" }).parseInbound({ sessionId: "abcdefabcdefabcdef", text: "Mon, 4 May, 9:30am", quickReplyId: "slot-2" });
+
+    expect([slack.quickReplyId, line.quickReplyId, web.quickReplyId]).toEqual(["slot-2", "slot-2", "slot-2"]);
   });
 });

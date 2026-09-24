@@ -4,8 +4,8 @@
 
 # Sentinel Demo — Privacy Policy
 
-**Effective date:** 24 August 2026
-**Version:** 1.0.0
+**Effective date:** 24 September 2026
+**Version:** 1.1.0
 
 Sentinel Demo ("Demo", "we", "us") is a demonstration chat assistant built by GraceSoft that lets you try both Sentinel Concierge (FAQ answers and appointment booking) and Sentinel Cook (dish recognition and recipe generation) in one conversation, over WhatsApp or Telegram. This policy explains what we collect when you message the demo, why, and how to exercise your rights over that data.
 
@@ -61,6 +61,8 @@ Under Singapore's Personal Data Protection Act (PDPA), you can ask us what perso
 **Contact form:** https://gracesoft.dev/contact
 
 We'll respond to reasonable requests within a reasonable time.
+
+You can also delete your data yourself, straight from the chat: send **/deletemydata** and confirm when asked. That permanently deletes your conversation history with every agent in the demo and your saved chat state. Appointments already booked on the calendar stay booked — ask Sentinel Concierge to cancel them first if you want them gone. If anything can't be deleted automatically, you'll be told so and pointed to the contacts above.
 
 ## 9. Changes to this policy
 

@@ -1,6 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
+import { CHANNELS_DISABLED } from "@gracesoft-sentinel/webhook-host";
 import type { ConciergeServiceEnv } from "./env.js";
 import { buildServer } from "./server.js";
 import { createSilentTestLogger } from "./test-support.js";
@@ -13,6 +14,7 @@ const BASE_ENV: ConciergeServiceEnv = {
   REDIS_URL: "redis://localhost:6379",
   DATABASE_URL: "postgres://localhost:5432/db",
   BUSINESS_CONFIG_PATH: "./business-config.json",
+  ...CHANNELS_DISABLED,
   WHATSAPP_ENABLED: false,
   TELEGRAM_ENABLED: true,
   TELEGRAM_BOT_TOKEN: "t",

@@ -5,6 +5,8 @@ export interface RegisteredAgent {
   name: string;
   /** Human-friendly label shown to the chatter, e.g. "Sentinel Concierge". */
   label: string;
+  /** One line on what this agent does, shown in the service map, e.g. "FAQs and appointment booking". */
+  description?: string;
   /**
    * Phrases that switch *to* this agent — matched case-insensitively
    * against the chatter's *entire* trimmed message, not a substring search,
@@ -31,6 +33,15 @@ export interface AgentSwitcherConfig {
   sessionIdFor?: (message: NormalizedMessage) => string;
   /** How long the "which agent is active" choice survives with no messages. Defaults to 24h. */
   sessionTtlSeconds?: number;
+  /**
+   * Whole-message phrases that show the service map — every registered
+   * agent, what it does, how to switch to it, and which one is active —
+   * instead of forwarding to the active agent. Defaults to
+   * "/services", "services", "/menu", "menu". Pass `[]` to turn it off.
+   */
+  serviceMapTriggers?: string[];
+  /** Optional extra line at the bottom of the service map, e.g. how to delete your data. */
+  serviceMapFooter?: string;
 }
 
 interface SwitcherContext {
@@ -38,8 +49,10 @@ interface SwitcherContext {
 }
 
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24;
+const DEFAULT_SERVICE_MAP_TRIGGERS = ["/services", "services", "/menu", "menu"];
 
-function defaultSessionIdFor(message: NormalizedMessage): string {
+/** The default key the switcher stores a chatter's active agent under — exported so a service's "delete my data" flow can erase it. */
+export function switcherSessionIdFor(message: Pick<NormalizedMessage, "channel" | "senderId">): string {
   return `switcher:${message.channel}:${message.senderId}`;
 }
 
@@ -48,10 +61,43 @@ function freshState(sessionId: string, message: NormalizedMessage): Conversation
   return { sessionId, channel: message.channel, userId: message.senderId, agent: "switcher", createdAt: now, updatedAt: now, context: {} };
 }
 
-function findTriggeredAgent(agents: RegisteredAgent[], text: string): RegisteredAgent | undefined {
-  const trimmed = text.trim().toLowerCase();
-  if (!trimmed) return undefined;
-  return agents.find((agent) => agent.triggers.some((trigger) => trigger.toLowerCase() === trimmed));
+function matchesTrigger(triggers: string[], value: string | undefined): boolean {
+  const trimmed = value?.trim().toLowerCase();
+  if (!trimmed) return false;
+  return triggers.some((trigger) => trigger.toLowerCase() === trimmed);
+}
+
+/**
+ * Checks the tapped quick-reply id as well as the text: the service map's
+ * buttons carry an agent's first trigger as their id, and some channels
+ * (WhatsApp, Slack) put the button's *label* in `text`, not its id.
+ */
+function findTriggeredAgent(agents: RegisteredAgent[], message: NormalizedMessage): RegisteredAgent | undefined {
+  return agents.find((agent) => matchesTrigger(agent.triggers, message.quickReplyId) || matchesTrigger(agent.triggers, message.text));
+}
+
+/**
+ * The service map: a plain-text directory of every agent behind this
+ * switcher, plus one quick-reply button per agent to jump straight to it.
+ * Plain text on purpose — it renders the same on every channel.
+ */
+export function renderServiceMap(
+  agents: RegisteredAgent[],
+  activeAgent: string,
+  options: { footer?: string; mapCommand?: string } = {}
+): NormalizedResponse {
+  const lines = agents.map((agent) => {
+    const current = agent.name === activeAgent ? " (you're here)" : "";
+    const description = agent.description ? ` — ${agent.description}` : "";
+    const command = agent.triggers[0] ? ` Say "${agent.triggers[0]}".` : "";
+    return `• ${agent.label}${current}${description}.${command}`;
+  });
+  const again = options.mapCommand ? ` Send ${options.mapCommand} any time to see this again.` : "";
+  const text = ["Here's everything in this demo:", "", ...lines, "", `Tap one to switch.${again}`, ...(options.footer ? [options.footer] : [])].join("\n");
+  return {
+    text,
+    quickReplies: agents.filter((agent) => agent.triggers[0]).map((agent) => ({ id: agent.triggers[0]!, label: agent.label })),
+  };
 }
 
 /**
@@ -69,9 +115,10 @@ function findTriggeredAgent(agents: RegisteredAgent[], text: string): Registered
  * either agent's own conversation history.
  */
 export function createAgentSwitcher(config: AgentSwitcherConfig): (message: NormalizedMessage) => Promise<NormalizedResponse> {
-  const sessionIdFor = config.sessionIdFor ?? defaultSessionIdFor;
+  const sessionIdFor = config.sessionIdFor ?? switcherSessionIdFor;
   const ttlSeconds = config.sessionTtlSeconds ?? DEFAULT_SESSION_TTL_SECONDS;
   const byName = new Map(config.agents.map((agent) => [agent.name, agent]));
+  const serviceMapTriggers = config.serviceMapTriggers ?? DEFAULT_SERVICE_MAP_TRIGGERS;
   const defaultAgent = byName.get(config.defaultAgent);
   if (!defaultAgent) {
     throw new Error(`createAgentSwitcher: defaultAgent "${config.defaultAgent}" is not in the agents list`);
@@ -82,13 +129,19 @@ export function createAgentSwitcher(config: AgentSwitcherConfig): (message: Norm
     const state = (await config.sessionStore.get(sessionId)) ?? freshState(sessionId, message);
     const context = state.context as SwitcherContext;
 
-    const triggered = message.text ? findTriggeredAgent(config.agents, message.text) : undefined;
+    if (matchesTrigger(serviceMapTriggers, message.text) || matchesTrigger(serviceMapTriggers, message.quickReplyId)) {
+      const active = (context.activeAgent && byName.get(context.activeAgent)) || defaultAgent;
+      return renderServiceMap(config.agents, active.name, { footer: config.serviceMapFooter, mapCommand: serviceMapTriggers[0] });
+    }
+
+    const triggered = findTriggeredAgent(config.agents, message);
     if (triggered) {
       await config.sessionStore.set(
         { ...state, context: { activeAgent: triggered.name }, updatedAt: new Date().toISOString() },
         ttlSeconds
       );
-      return { text: `Switched to ${triggered.label}. Go ahead — say something to get started.` };
+      const mapHint = serviceMapTriggers[0] ? ` (Send ${serviceMapTriggers[0]} to see everything else in this demo.)` : "";
+      return { text: `Switched to ${triggered.label}. Go ahead — say something to get started.${mapHint}` };
     }
 
     const active = (context.activeAgent && byName.get(context.activeAgent)) || defaultAgent;

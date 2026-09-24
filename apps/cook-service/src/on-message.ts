@@ -19,7 +19,8 @@ export interface OnMessageDeps {
   rateLimiter?: RedisRateLimiter;
 }
 
-function sessionIdFor(message: NormalizedMessage): string {
+/** Exported so the "delete my data" flow erases exactly the key this handler writes. */
+export function sessionIdFor(message: Pick<NormalizedMessage, "channel" | "senderId" | "businessChannelId">): string {
   return `cook:${message.channel}:${message.senderId}`;
 }
 

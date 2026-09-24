@@ -23,8 +23,8 @@ describe("loadEnv — structured mode (default)", () => {
     expect(() => loadEnv({ OPENAI_API_KEY: "sk", TELEGRAM_ENABLED: "true", TELEGRAM_BOT_TOKEN: "t", TELEGRAM_WEBHOOK_SECRET: "s" } as NodeJS.ProcessEnv)).toThrowError(/SNAPSHOT_DIR/);
   });
 
-  it("requires at least one of WHATSAPP_ENABLED or TELEGRAM_ENABLED", () => {
-    expect(() => loadEnv({ OPENAI_API_KEY: "sk", SNAPSHOT_DIR: "/tmp" } as NodeJS.ProcessEnv)).toThrowError(/WHATSAPP_ENABLED or TELEGRAM_ENABLED/);
+  it("requires at least one channel to be enabled", () => {
+    expect(() => loadEnv({ OPENAI_API_KEY: "sk", SNAPSHOT_DIR: "/tmp" } as NodeJS.ProcessEnv)).toThrowError(/At least one channel must be enabled/);
   });
 
   it("requires TELEGRAM_BOT_TOKEN/TELEGRAM_WEBHOOK_SECRET when TELEGRAM_ENABLED=true", () => {

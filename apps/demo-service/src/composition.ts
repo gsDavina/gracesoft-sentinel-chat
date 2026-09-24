@@ -5,19 +5,25 @@ import { PineconeSnapshotSearchProvider } from "@gracesoft-sentinel/provider-sna
 import { RedisRateLimiter, RedisSessionStore, createRedisClient } from "@gracesoft-sentinel/provider-session-redis";
 import { PostgresConversationLogger, createPgClient } from "@gracesoft-sentinel/logging-postgres";
 import { createLogger, type Logger } from "@gracesoft-sentinel/logging";
-import { createAgentSwitcher, type RegisteredAgent } from "@gracesoft-sentinel/agent-switcher";
+import { createAgentSwitcher, switcherSessionIdFor, type RegisteredAgent } from "@gracesoft-sentinel/agent-switcher";
+import { conversationLogEraser, sessionStoreEraser, withUserDataDeletion, type DataSubject } from "@gracesoft-sentinel/user-data-deletion";
 import type { AIProvider, NormalizedMessage, NormalizedResponse, RecipeSourceProvider, SessionStore } from "@gracesoft-sentinel/core";
 import { buildSearchTools, createEmptyQueryContext, loadSnapshot, type QueryContext, type ToolDefinition } from "@gracesoft-sentinel/agent-assistant";
 import { loadBusinessConfig, loadFaqBlueprint } from "./business-config-loader.js";
-import { createConciergeOnMessageHandler } from "./concierge-on-message.js";
-import { createCookOnMessageHandler } from "./cook-on-message.js";
-import { createAssistantOnMessageHandler } from "./assistant-on-message.js";
+import { createConciergeOnMessageHandler, sessionIdFor as conciergeSessionIdFor } from "./concierge-on-message.js";
+import { createCookOnMessageHandler, sessionIdFor as cookSessionIdFor } from "./cook-on-message.js";
+import { createAssistantOnMessageHandler, sessionIdFor as assistantSessionIdFor } from "./assistant-on-message.js";
 import type { DemoServiceEnv } from "./env.js";
 
 export interface Composition {
   onMessage: (message: NormalizedMessage) => Promise<NormalizedResponse>;
   readinessCheck: () => Promise<boolean>;
   appLogger: Logger;
+}
+
+/** Every key demo-service writes for one chatter: each agent's own session plus the switcher's "active agent" record. */
+export function demoSessionIds(subject: DataSubject): string[] {
+  return [conciergeSessionIdFor(subject), cookSessionIdFor(subject), assistantSessionIdFor(subject), switcherSessionIdFor(subject)];
 }
 
 const RATE_LIMITED_MESSAGE = "You're sending messages a bit quickly — please wait a moment and try again.";
@@ -80,7 +86,13 @@ function buildAssistantAgent(env: DemoServiceEnv, aiProvider: AIProvider, sessio
     maxTokens: env.ASSISTANT_MAX_TOKENS_PER_REQUEST,
   });
 
-  return { name: "assistant", label: "GraceSoft Assistant", triggers: ["/assistant", "assistant"], onMessage };
+  return {
+    name: "assistant",
+    label: "GraceSoft Assistant",
+    description: "Q&A over GraceSoft Desk time/finance and Skylight board data",
+    triggers: ["/assistant", "assistant"],
+    onMessage,
+  };
 }
 
 /**
@@ -139,15 +151,28 @@ export function buildComposition(env: DemoServiceEnv): Composition {
 
   const switcherOnMessage = createAgentSwitcher({
     agents: [
-      { name: "concierge", label: "Sentinel Concierge", triggers: ["/concierge", "concierge"], onMessage: conciergeOnMessage },
-      { name: "cook", label: "Sentinel Cook", triggers: ["/cook", "cook"], onMessage: cookOnMessage },
+      {
+        name: "concierge",
+        label: "Sentinel Concierge",
+        description: "answers business FAQs and books, reschedules or cancels appointments",
+        triggers: ["/concierge", "concierge"],
+        onMessage: conciergeOnMessage,
+      },
+      {
+        name: "cook",
+        label: "Sentinel Cook",
+        description: "send a dish photo (or ask \"recipe for …\") and get a recipe, grocery list or meal plan",
+        triggers: ["/cook", "cook"],
+        onMessage: cookOnMessage,
+      },
       ...(assistantAgent ? [assistantAgent] : []),
     ],
     defaultAgent: env.DEMO_DEFAULT_AGENT,
     sessionStore,
+    serviceMapFooter: "Send /deletemydata to erase everything this demo has stored about you.",
   });
 
-  const onMessage = async (message: NormalizedMessage): Promise<NormalizedResponse> => {
+  const rateLimitedOnMessage = async (message: NormalizedMessage): Promise<NormalizedResponse> => {
     const { limited } = await rateLimiter.hit(`${message.channel}:${message.senderId}`);
     if (limited) {
       appLogger.warn({ channel: message.channel }, "sender rate limit exceeded");
@@ -155,6 +180,19 @@ export function buildComposition(env: DemoServiceEnv): Composition {
     }
     return switcherOnMessage(message);
   };
+
+  // Outermost, so the command never reaches the switcher, an agent, or the
+  // log it erases — and covers every agent at once, since it's the same
+  // chatter behind all of them.
+  const onMessage = withUserDataDeletion(rateLimitedOnMessage, {
+    erasers: [sessionStoreEraser(sessionStore, demoSessionIds), conversationLogEraser(conversationLogger, demoSessionIds)],
+    pendingStore: sessionStore,
+    whatIsDeleted: ["your conversation history with every agent in this demo", "your saved chat state"],
+    notDeletedNote: "Appointments you've already booked stay on the calendar — say \"cancel my booking\" to Sentinel Concierge first if you'd like one cancelled.",
+    contact: "hello@gracesoft.dev",
+    onDeleted: ({ subject, erased, failed }) =>
+      appLogger.info({ channel: subject.channel, erased, failed: failed.map((f) => f.eraser) }, "user data deletion completed"),
+  });
 
   const readinessCheck = async (): Promise<boolean> => {
     await redisClient.get("__healthcheck__");

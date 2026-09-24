@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { CHANNELS_DISABLED } from "@gracesoft-sentinel/webhook-host";
 import { buildComposition } from "./composition.js";
 import type { ConciergeServiceEnv } from "./env.js";
 
@@ -26,6 +27,7 @@ describe("buildComposition — concierge-service", () => {
     REDIS_URL: "redis://localhost:6379",
     DATABASE_URL: "postgres://localhost:5432/db",
     BUSINESS_CONFIG_PATH: resolve(here, "../../../_internal-docs/data/business-config.example.json"),
+    ...CHANNELS_DISABLED,
     WHATSAPP_ENABLED: false,
     TELEGRAM_ENABLED: true,
     TELEGRAM_BOT_TOKEN: "t",

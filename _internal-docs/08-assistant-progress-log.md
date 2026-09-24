@@ -4,6 +4,12 @@ Companion to `08-assistant-milestone.md` and `08-assistant-test-checklist.md.md`
 
 ---
 
+## 2026-09-24 — Web UI back, via channel packages
+
+**Status:** Closes the repo TODO item "assistant-service: remove the baked-in UI; UI should be served via the channel packages". The removal half was done in the pivot entry below. The other half is now done too: `assistant-service` serves the GraceSoft- or Dav/Devs-branded browser chat through `channel-web-gracesoft`/`channel-web-davdevs` (on the shared `web-chat-kit` template), mounted by `@gracesoft-sentinel/webhook-host` exactly like every other channel. Enable it with `WEB_GRACESOFT_ENABLED`/`WEB_DAVDEVS_ENABLED` and set `WEB_CHAT_ACCESS_TOKEN` before exposing it. The service contributes only default copy (product name, welcome line). It also gained `/deletemydata` (in-memory sessions only; there's no Postgres here) and Slack/LINE/SMS. Full details are in `05-progress-log.md`'s 2026-09-24 TODO-sweep entry.
+
+---
+
 ## 2026-09-24 — Pivot: Pinecone-search mode, and the standalone service rebuilt around Telegram/WhatsApp (no browser UI)
 
 **Status:** Two user-directed architecture changes on top of the completed M0-M7 build, both done, tested, and verified across the whole workspace.

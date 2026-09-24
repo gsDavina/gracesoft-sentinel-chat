@@ -30,6 +30,13 @@ packages/
   channel-whatsapp/              ChannelAdapter: WhatsApp Cloud API
   channel-telegram/              ChannelAdapter: Telegram Bot API
   channel-sms/                   ChannelAdapter: SMS/MMS via Twilio
+  channel-slack/                 ChannelAdapter: Slack (Events API + interactivity)
+  channel-line/                  ChannelAdapter: LINE Messaging API
+  web-chat-kit/                  Template for branded browser chats: theme tokens, page, adapter, router
+  channel-web-gracesoft/         Browser chat channel in GraceSoft branding (built on web-chat-kit)
+  channel-web-davdevs/           Browser chat channel in Dav/Devs branding (built on web-chat-kit)
+  webhook-host/                  Mounts every enabled channel side by side on one service; shared channel env schema
+  user-data-deletion/            "/deletemydata" confirm-then-erase wrapper for any service's onMessage
 
   provider-ai-openai/            AIProvider: OpenAI (chat, vision, embeddings, Whisper transcription)
   provider-ai-gemini/            AIProvider: Google Gemini
@@ -81,6 +88,26 @@ Each service under `apps/` needs its own `.env` (see the `.env.example` in that 
 docker compose up --build
 ```
 
+## Channels
+
+Every service (`concierge-`, `cook-`, `demo-`, `assistant-service`) mounts its channels through `@gracesoft-sentinel/webhook-host`, and **any combination can run at once**. Each is switched on with its own `*_ENABLED` flag (see each app's `.env.example`) and lives at its own path:
+
+| Channel | Flag | Path |
+|---|---|---|
+| WhatsApp Cloud API | `WHATSAPP_ENABLED` | `/whatsapp/webhook` |
+| Telegram | `TELEGRAM_ENABLED` | `/telegram/webhook` |
+| SMS/MMS (Twilio) | `SMS_ENABLED` | `/sms/webhook` |
+| Slack | `SLACK_ENABLED` | `/slack/webhook` (Events + Interactivity) |
+| LINE | `LINE_ENABLED` | `/line/webhook` |
+| GraceSoft web chat | `WEB_GRACESOFT_ENABLED` | `/chat/gracesoft/` |
+| Dav/Devs web chat | `WEB_DAVDEVS_ENABLED` | `/chat/davdevs/` |
+
+The old shared `/webhook` path still works (each request is routed by its platform's signature header), so already-registered webhook URLs keep working. Set `WEB_CHAT_ACCESS_TOKEN` before exposing a web chat publicly. To brand a new web chat, write a `WebChatTheme` and call `createWebChatChannel` from `web-chat-kit`; the two `channel-web-*` packages are worked examples. Full endpoint reference: [`docs/webhooks.html`](docs/webhooks.html).
+
+**Deleting your data:** on any channel, `/deletemydata` asks for confirmation, then hard-deletes that chatter's session state and Postgres conversation/booking-log rows. Appointments already on the business calendar are left in place (the chatter is told to cancel them first).
+
+**Demo service map:** in `demo-service`, `/services` (or `menu`) lists every agent behind the switcher with what it does, marks the active one, and offers one tap-to-switch button per agent.
+
 ## API documentation
 
 [`docs/`](docs/index.html) has a branded HTML reference covering webhook endpoints per channel (auth requirements, payload handling), the core data contracts (`NormalizedMessage`, `BusinessConfig`, provider interfaces), and multi-tenant setup. Open `docs/index.html` directly in a browser, or serve it locally:
@@ -93,7 +120,7 @@ npx serve docs
 
 A third, separate demo product: an LLM chatbot that answers questions about a redacted snapshot of GraceSoft Desk (time/finance) and GraceSoft Skylight (kanban board) data — "What's overdue?", "How many billable hours did I log in August?", "How is Project 4 performing?" — never doing arithmetic itself, always grounding every number in a deterministic query function. Full spec, build history and current status: [`_internal-docs/08-assistant-milestone.md`](_internal-docs/08-assistant-milestone.md) / [`08-assistant-progress-log.md`](_internal-docs/08-assistant-progress-log.md) / [`08-assistant-test-checklist.md.md`](_internal-docs/08-assistant-test-checklist.md.md).
 
-No browser UI — like every other agent in this repo, the assistant is reachable only through channel packages (`channel-telegram`/`channel-whatsapp`), never a bespoke per-service UI.
+No bespoke UI — like every other agent in this repo, the assistant is reachable only through channel packages: Telegram, WhatsApp, SMS, Slack, LINE, or the branded browser chats (`WEB_GRACESOFT_ENABLED`/`WEB_DAVDEVS_ENABLED`, served by `channel-web-gracesoft`/`channel-web-davdevs`).
 
 **Setup — standalone (`apps/assistant-service`):**
 ```bash

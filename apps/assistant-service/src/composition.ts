@@ -7,7 +7,8 @@ import { buildDemoFallbackAnswers, buildSearchTools, createEmptyQueryContext, lo
 import { InMemorySessionStore } from "./in-memory-session-store.js";
 import { DailyCallCap } from "./daily-call-cap.js";
 import { SessionRateLimiter } from "./session-rate-limiter.js";
-import { createOnMessageHandler } from "./on-message.js";
+import { sessionStoreEraser, withUserDataDeletion } from "@gracesoft-sentinel/user-data-deletion";
+import { createOnMessageHandler, sessionIdFor } from "./on-message.js";
 import type { AssistantServiceEnv } from "./env.js";
 
 export interface Composition {
@@ -60,7 +61,7 @@ export function buildComposition(env: AssistantServiceEnv): Composition {
   const callCap = new DailyCallCap(env.DAILY_MODEL_CALL_CAP);
   const rateLimiter = new SessionRateLimiter(env.RATE_LIMIT_PER_CHATTER_PER_MINUTE);
 
-  const onMessage = createOnMessageHandler({
+  const assistantOnMessage = createOnMessageHandler({
     ctx,
     tools,
     aiProvider,
@@ -72,6 +73,15 @@ export function buildComposition(env: AssistantServiceEnv): Composition {
     maxSteps: env.MAX_TOOL_STEPS,
     timeoutMs: env.MODEL_TIMEOUT_MS,
     maxTokens: env.MAX_TOKENS_PER_REQUEST,
+  });
+  // Sessions are in-memory only here (no Postgres log), so that's all there is to erase.
+  const onMessage = withUserDataDeletion(assistantOnMessage, {
+    erasers: [sessionStoreEraser(sessionStore, (subject) => [sessionIdFor(subject)])],
+    pendingStore: sessionStore,
+    whatIsDeleted: ["your conversation history with the assistant"],
+    contact: "hello@gracesoft.dev",
+    onDeleted: ({ subject, erased, failed }) =>
+      appLogger.info({ channel: subject.channel, erased, failed: failed.map((f) => f.eraser) }, "user data deletion completed"),
   });
 
   // Everything above already ran to completion synchronously (or threw) by the time this returns — nothing external left to ping.

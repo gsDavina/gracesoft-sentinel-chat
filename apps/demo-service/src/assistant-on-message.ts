@@ -17,7 +17,8 @@ export interface AssistantOnMessageDeps {
 
 const NO_TEXT_MESSAGE = "Ask me about GraceSoft Desk or Skylight — hours, billable value, cash position, overdue cards, project health, and so on.";
 
-function sessionIdFor(message: NormalizedMessage): string {
+/** Exported so the "delete my data" flow erases exactly the key this handler writes. */
+export function sessionIdFor(message: Pick<NormalizedMessage, "channel" | "senderId" | "businessChannelId">): string {
   return `assistant:${message.channel}:${message.senderId}`;
 }
 
