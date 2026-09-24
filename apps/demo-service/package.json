@@ -13,6 +13,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@gracesoft-sentinel/agent-assistant": "workspace:*",
     "@gracesoft-sentinel/agent-concierge": "workspace:*",
     "@gracesoft-sentinel/agent-cook": "workspace:*",
     "@gracesoft-sentinel/agent-switcher": "workspace:*",

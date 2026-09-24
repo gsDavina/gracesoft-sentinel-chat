@@ -4,11 +4,13 @@ import { PineconeRecipeProvider, createPineconeClient } from "@gracesoft-sentine
 import { RedisRateLimiter, RedisSessionStore, createRedisClient } from "@gracesoft-sentinel/provider-session-redis";
 import { PostgresConversationLogger, createPgClient } from "@gracesoft-sentinel/logging-postgres";
 import { createLogger, type Logger } from "@gracesoft-sentinel/logging";
-import { createAgentSwitcher } from "@gracesoft-sentinel/agent-switcher";
-import type { AIProvider, NormalizedMessage, NormalizedResponse, RecipeSourceProvider } from "@gracesoft-sentinel/core";
+import { createAgentSwitcher, type RegisteredAgent } from "@gracesoft-sentinel/agent-switcher";
+import type { AIProvider, NormalizedMessage, NormalizedResponse, RecipeSourceProvider, SessionStore } from "@gracesoft-sentinel/core";
+import { loadSnapshot, type QueryContext } from "@gracesoft-sentinel/agent-assistant";
 import { loadBusinessConfig, loadFaqBlueprint } from "./business-config-loader.js";
 import { createConciergeOnMessageHandler } from "./concierge-on-message.js";
 import { createCookOnMessageHandler } from "./cook-on-message.js";
+import { createAssistantOnMessageHandler } from "./assistant-on-message.js";
 import type { DemoServiceEnv } from "./env.js";
 
 export interface Composition {
@@ -39,6 +41,36 @@ function buildRecipeSourceProvider(env: DemoServiceEnv, aiProvider: AIProvider):
 }
 
 /**
+ * GraceSoft Assistant (feature-flagged): `undefined` when `ASSISTANT_ENABLED`
+ * is unset, so nothing about the switcher or its routes changes for a
+ * deployment that hasn't turned this on — same opt-in shape as
+ * `buildRecipeSourceProvider` above. Loads the snapshot synchronously here
+ * (env.ts's `superRefine` already guarantees `ASSISTANT_SNAPSHOT_DIR` is set
+ * whenever this runs), so a bad snapshot fails demo-service's boot loudly,
+ * the same way it fails `assistant-service`'s.
+ */
+function buildAssistantAgent(env: DemoServiceEnv, aiProvider: AIProvider, sessionStore: SessionStore, appLogger: Logger): RegisteredAgent | undefined {
+  if (!env.ASSISTANT_ENABLED) return undefined;
+
+  const loaded = loadSnapshot(env.ASSISTANT_SNAPSHOT_DIR!, { asOfDate: env.ASSISTANT_AS_OF_DATE });
+  appLogger.info({ recordCounts: loaded.summary.recordCounts, warnings: loaded.summary.warnings.length }, "assistant snapshot loaded");
+  for (const warning of loaded.summary.warnings) appLogger.warn({ code: warning.code }, warning.message);
+
+  const ctx: QueryContext = { desk: loaded.desk, skylight: loaded.skylight, crossTool: loaded.crossTool, asOfDate: env.ASSISTANT_AS_OF_DATE };
+  const onMessage = createAssistantOnMessageHandler({
+    ctx,
+    aiProvider,
+    sessionStore,
+    appLogger,
+    maxSteps: env.ASSISTANT_MAX_TOOL_STEPS,
+    timeoutMs: env.ASSISTANT_MODEL_TIMEOUT_MS,
+    maxTokens: env.ASSISTANT_MAX_TOKENS_PER_REQUEST,
+  });
+
+  return { name: "assistant", label: "GraceSoft Assistant", triggers: ["/assistant", "assistant"], onMessage };
+}
+
+/**
  * The composition root: wires agent-concierge AND agent-cook side by side
  * behind `@gracesoft-sentinel/agent-switcher`, so one channel webhook can
  * demo both. Everything below the switcher is a trimmed, single-tenant
@@ -65,10 +97,11 @@ export function buildComposition(env: DemoServiceEnv): Composition {
   const calendarProvider = new GoogleCalendarProvider({ client: calendarClient, businessHours: businessConfig.businessHours });
 
   const redisClient = createRedisClient(env.REDIS_URL);
-  // One shared store for all three concerns (Concierge sessions, Cook
-  // sessions, and the switcher's own "which agent is active" state) — safe
-  // because each already namespaces its own sessionId ("concierge:...",
-  // "cook:...", "switcher:..."), so nothing collides under one keyPrefix.
+  // One shared store for all four concerns (Concierge sessions, Cook
+  // sessions, Assistant sessions, and the switcher's own "which agent is
+  // active" state) — safe because each already namespaces its own
+  // sessionId ("concierge:...", "cook:...", "assistant:...", "switcher:..."),
+  // so nothing collides under one keyPrefix.
   const sessionStore = new RedisSessionStore({ client: redisClient, keyPrefix: "gracesoft-sentinel:demo:" });
   // One shared limiter, not one per agent like the two real services use —
   // here it's genuinely the same chatter switching between agents, not two
@@ -89,11 +122,13 @@ export function buildComposition(env: DemoServiceEnv): Composition {
   });
   const recipeSourceProvider = buildRecipeSourceProvider(env, aiProvider);
   const cookOnMessage = createCookOnMessageHandler({ aiProvider, sessionStore, conversationLogger, appLogger, recipeSourceProvider });
+  const assistantAgent = buildAssistantAgent(env, aiProvider, sessionStore, appLogger);
 
   const switcherOnMessage = createAgentSwitcher({
     agents: [
       { name: "concierge", label: "Sentinel Concierge", triggers: ["/concierge", "concierge"], onMessage: conciergeOnMessage },
       { name: "cook", label: "Sentinel Cook", triggers: ["/cook", "cook"], onMessage: cookOnMessage },
+      ...(assistantAgent ? [assistantAgent] : []),
     ],
     defaultAgent: env.DEMO_DEFAULT_AGENT,
     sessionStore,

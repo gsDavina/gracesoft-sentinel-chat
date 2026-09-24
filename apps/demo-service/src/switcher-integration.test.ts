@@ -1,8 +1,12 @@
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { NormalizedMessage } from "@gracesoft-sentinel/core";
 import { createAgentSwitcher } from "@gracesoft-sentinel/agent-switcher";
+import { loadSnapshot, type QueryContext } from "@gracesoft-sentinel/agent-assistant";
 import { createConciergeOnMessageHandler } from "./concierge-on-message.js";
 import { createCookOnMessageHandler } from "./cook-on-message.js";
+import { createAssistantOnMessageHandler } from "./assistant-on-message.js";
 import {
   FakeAiProvider,
   FakeCalendarProvider,
@@ -13,6 +17,13 @@ import {
   TEST_FAQ_BLUEPRINT,
   createSilentTestLogger,
 } from "./test-support.js";
+
+const FIXTURE_SNAPSHOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../packages/agent-assistant/data/snapshot/valid");
+
+function loadFixtureContext(): QueryContext {
+  const snapshot = loadSnapshot(FIXTURE_SNAPSHOT_DIR);
+  return { desk: snapshot.desk, skylight: snapshot.skylight, crossTool: snapshot.crossTool, asOfDate: "2026-09-10" };
+}
 
 /**
  * Proves the actual demo-service wiring — not just agent-switcher's own
@@ -40,11 +51,21 @@ function buildTestSwitcher(recipeSourceProvider?: FakeRecipeSourceProvider) {
     appLogger,
   });
   const cookOnMessage = createCookOnMessageHandler({ aiProvider, sessionStore, conversationLogger, appLogger, recipeSourceProvider });
+  const assistantOnMessage = createAssistantOnMessageHandler({
+    ctx: loadFixtureContext(),
+    aiProvider,
+    sessionStore,
+    appLogger,
+    maxSteps: 6,
+    timeoutMs: 15_000,
+    maxTokens: 1024,
+  });
 
   const onMessage = createAgentSwitcher({
     agents: [
       { name: "concierge", label: "Sentinel Concierge", triggers: ["/concierge", "concierge"], onMessage: conciergeOnMessage },
       { name: "cook", label: "Sentinel Cook", triggers: ["/cook", "cook"], onMessage: cookOnMessage },
+      { name: "assistant", label: "GraceSoft Assistant", triggers: ["/assistant", "assistant"], onMessage: assistantOnMessage },
     ],
     defaultAgent: "concierge",
     sessionStore,
@@ -122,6 +143,17 @@ describe("demo-service — switching between real agent-concierge and agent-cook
     // would otherwise generate a generic recipe instead of prompting for a photo.
     const response = await onMessage(makeMessage({ text: "do you have my mom's chicken curry recipe?" }));
     expect(response.text).toMatch(/send me a photo/i);
+  });
+
+  it("switches to the GraceSoft Assistant via command and answers from the real M2 query layer/M3 loop", async () => {
+    const { onMessage } = buildTestSwitcher();
+    const switchResponse = await onMessage(makeMessage({ text: "/assistant" }));
+    expect(switchResponse.text).toContain("GraceSoft Assistant");
+
+    const answer = await onMessage(makeMessage({ text: "what stage is project 4 in?" }));
+    // FakeAiProvider always replies {"action":"final_answer","text":"fake answer"} — proves the
+    // request reached runAssistant and came back through the switcher, not that the model chose a tool.
+    expect(answer.text).toBe("fake answer");
   });
 
   it("logs each turn under the correct agent name, not always whichever was active last", async () => {

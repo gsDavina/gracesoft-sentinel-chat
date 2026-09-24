@@ -37,7 +37,21 @@ export const DemoServiceEnvSchema = z
     BUSINESS_CONFIG_PATH: z.string().min(1),
 
     /** Which agent a chatter talks to before ever explicitly switching. */
-    DEMO_DEFAULT_AGENT: z.enum(["concierge", "cook"]).default("concierge"),
+    DEMO_DEFAULT_AGENT: z.enum(["concierge", "cook", "assistant"]).default("concierge"),
+
+    /**
+     * GraceSoft Assistant (feature-flagged, off by default) — a third agent
+     * demoing Q&A over a redacted GraceSoft Desk/Skylight snapshot,
+     * alongside Concierge and Cook. Unset/false leaves demo-service exactly
+     * as it was before this agent existed: no route, no config requirement,
+     * nothing registered with the switcher.
+     */
+    ASSISTANT_ENABLED: booleanFromEnvString,
+    ASSISTANT_SNAPSHOT_DIR: z.string().optional(),
+    ASSISTANT_AS_OF_DATE: z.string().date().default("2026-09-10"),
+    ASSISTANT_MAX_TOOL_STEPS: z.coerce.number().int().positive().default(6),
+    ASSISTANT_MODEL_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+    ASSISTANT_MAX_TOKENS_PER_REQUEST: z.coerce.number().int().positive().default(1024),
 
     /**
      * "Mother's Day Edition" (opt-in): personal recipe retrieval via RAG,
@@ -78,6 +92,12 @@ export const DemoServiceEnvSchema = z
     }
     if (env.PINECONE_INDEX_NAME && !env.PINECONE_API_KEY) {
       ctx.addIssue({ code: "custom", path: ["PINECONE_API_KEY"], message: "PINECONE_API_KEY is required when PINECONE_INDEX_NAME is set" });
+    }
+    if (env.ASSISTANT_ENABLED && !env.ASSISTANT_SNAPSHOT_DIR) {
+      ctx.addIssue({ code: "custom", path: ["ASSISTANT_SNAPSHOT_DIR"], message: "ASSISTANT_SNAPSHOT_DIR is required when ASSISTANT_ENABLED=true" });
+    }
+    if (env.DEMO_DEFAULT_AGENT === "assistant" && !env.ASSISTANT_ENABLED) {
+      ctx.addIssue({ code: "custom", path: ["DEMO_DEFAULT_AGENT"], message: "DEMO_DEFAULT_AGENT can't be \"assistant\" unless ASSISTANT_ENABLED=true" });
     }
   });
 

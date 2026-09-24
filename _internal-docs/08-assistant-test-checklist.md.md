@@ -183,15 +183,15 @@ Run against a small hand-built fixture with hand-calculated answers.
 
 ## 6. Demo-service integration (M5)
 
-- [ ] demo-service starts with the assistant enabled, with no route or config collisions.
-- [ ] With the feature flag off, the assistant's routes and UI are gone and nothing errors.
-- [ ] demo-service's auth and session model map correctly onto assistant sessions.
-- [ ] Errors follow demo-service's error format.
-- [ ] Logs follow demo-service's logging conventions and include the assistant's per-request fields.
-- [ ] Assistant config is namespaced and validated alongside demo-service config.
-- [ ] The golden set passes through demo-service's entry point with the same results as the standalone version.
-- [ ] A crash or timeout inside the assistant doesn't take down demo-service.
-- [ ] demo-service's existing test suite still passes with the assistant enabled.
+- [x] demo-service starts with the assistant enabled, with no route or config collisions. (`composition.test.ts`; there are no new routes at all — see the milestone doc's M5 section)
+- [x] With the feature flag off, the assistant's agent is gone and nothing errors. *("routes and UI" doesn't apply here — the switcher pattern adds no HTTP routes and demo-service has no UI; with `ASSISTANT_ENABLED` unset, `buildAssistantAgent` returns `undefined` and nothing is added to the switcher, tested via every existing `composition.test.ts`/`switcher-integration.test.ts` case, all of which run with it unset.)*
+- [x] demo-service's auth and session model map correctly onto assistant sessions. (own `assistant:{channel}:{senderId}` key on the shared `RedisSessionStore`, same convention as `concierge:`/`cook:`)
+- [x] Errors follow demo-service's error format. *(the assistant never throws out to the switcher — `runAssistant` already converts every internal failure into a graceful text answer; there's no separate "assistant error format" to diverge from demo-service's)*
+- [x] Logs follow demo-service's logging conventions and include the assistant's per-request fields. (`createLogger("demo-service")`, structured `sessionId`/`steps`/`toolCallCount`/`gracefulFailure` per request — live-verified in the M4 entry's server logs, same shape)
+- [x] Assistant config is namespaced and validated alongside demo-service config. (`ASSISTANT_*` env vars, one `superRefine` alongside the existing WhatsApp/Telegram/Pinecone checks)
+- [ ] The golden set passes through demo-service's entry point with the same results as the standalone version. *(needs the golden set itself — M6 — and a live model)*
+- [x] A crash or timeout inside the assistant doesn't take down demo-service. (`runAssistant`'s own timeout/retry/graceful-failure handling, already unit-tested in `agent-assistant`; nothing in the demo-service integration layer can throw past it)
+- [x] demo-service's existing test suite still passes with the assistant enabled. *(strictly: with it registered — `switcher-integration.test.ts`'s `buildTestSwitcher` always includes it now; all pre-existing Concierge/Cook tests pass unchanged)*
 
 ---
 

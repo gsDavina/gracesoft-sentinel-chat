@@ -64,9 +64,9 @@ module.exports = {
     },
     {
       name: "no-orphans",
-      comment: "Modules that no other module imports and that import nothing themselves are likely dead code.",
+      comment: "Modules that no other module imports and that import nothing themselves are likely dead code. `public/` assets are excluded — they're loaded via a <script> tag, not an ES import, so dependency-cruiser can never see that edge.",
       severity: "warn",
-      from: { orphan: true, pathNot: ["\\.d\\.ts$", "(^|/)index\\.ts$"] },
+      from: { orphan: true, pathNot: ["\\.d\\.ts$", "(^|/)index\\.ts$", "(^|/)public/"] },
       to: {},
     },
     {

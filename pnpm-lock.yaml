@@ -185,6 +185,9 @@ importers:
 
   apps/demo-service:
     dependencies:
+      '@gracesoft-sentinel/agent-assistant':
+        specifier: workspace:*
+        version: link:../../packages/agent-assistant
       '@gracesoft-sentinel/agent-concierge':
         specifier: workspace:*
         version: link:../../packages/agent-concierge

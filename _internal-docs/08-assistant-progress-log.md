@@ -4,6 +4,27 @@ Companion to `08-assistant-milestone.md` and `08-assistant-test-checklist.md.md`
 
 ---
 
+## 2026-09-24 — M5: demo-service integration (third agent behind the switcher)
+
+**Status:** M5 done. No new package, no new HTTP surface — the existing `agent-switcher` pattern (`RegisteredAgent { name, label, triggers, onMessage }`) already generalizes cleanly to a third agent, which is exactly what M0's resolved open question #1 predicted back when M0-M2 landed.
+
+**What was built:**
+- `apps/demo-service/src/assistant-on-message.ts` — `createAssistantOnMessageHandler`, the same kind of adapter `createConciergeOnMessageHandler`/`createCookOnMessageHandler` already are: loads session history (`assistant:{channel}:{senderId}` key on demo-service's existing shared `RedisSessionStore` — same per-agent-prefix convention `concierge:`/`cook:`/`switcher:` already use), runs `runAssistant`, persists the turn, logs a structured per-request line, returns `{ text: result.answer }`.
+- `env.ts` — `ASSISTANT_ENABLED` (default `false`, same shape as `WHATSAPP_ENABLED`/`TELEGRAM_ENABLED`/the Pinecone opt-in), `ASSISTANT_SNAPSHOT_DIR` (required only when enabled, enforced by `superRefine`), `ASSISTANT_AS_OF_DATE`/`ASSISTANT_MAX_TOOL_STEPS`/`ASSISTANT_MODEL_TIMEOUT_MS`/`ASSISTANT_MAX_TOKENS_PER_REQUEST`, and `DEMO_DEFAULT_AGENT` extended to allow `"assistant"` (guarded: can't be the default unless the flag is also on).
+- `composition.ts` — `buildAssistantAgent()` returns `undefined` when disabled (nothing added to the switcher's `agents` array, `ASSISTANT_SNAPSHOT_DIR` never read); when enabled, loads the snapshot synchronously at boot — same fail-loud-before-`app.listen` behavior as `assistant-service`'s own composition root — and registers `{ name: "assistant", label: "GraceSoft Assistant", triggers: ["/assistant", "assistant"], onMessage }` alongside the existing Concierge/Cook entries.
+
+**Testing note:** `switcher-integration.test.ts`'s shared `FakeAiProvider` (in `test-support.ts`) previously returned one fixed JSON blob shaped for Concierge's `{answer,escalate}` and Cook's recipe fields. Rather than add a second fake just for the assistant's different JSON protocol (`{action,text}`/`{action,tool,arguments}`), extended the same blob with `action: "final_answer", text: "fake answer"` — each parser only reads its own known keys, so one fake now satisfies all three agents' protocols at once, and the existing "fake answer" expectation used by Concierge's own tests kept working unchanged.
+
+**Also found and fixed while wiring this in:** `pnpm boundaries` flagged `apps/assistant-service/public/app.js` as a `no-orphans` violation (dependency-cruiser can't see the `<script src="app.js">` edge from HTML, so it looks unreferenced) — a warning, not an error, so it didn't fail CI, but excluded `public/` from that rule in `.dependency-cruiser.cjs` anyway rather than leave a permanent false-positive in the boundaries output. Also ran a full (unscoped) `pnpm install`, since earlier `--filter` scoped installs across this session had left `packages/ingest-mysql-pinecone` (unrelated pre-existing package, untouched by any of this work) without its own `node_modules`, breaking a full-workspace `pnpm -r run typecheck` for a reason that had nothing to do with the assistant.
+
+**Verified locally (all green):** full workspace `pnpm -r run typecheck`, `pnpm -r run test` (every package, not just `agent-assistant`/`assistant-service`/`demo-service`), `pnpm -r run lint`, `pnpm boundaries` (0 violations, 728 modules/1,668 dependencies), `pnpm build` — all clean across all 28 workspace projects. `apps/demo-service` specifically: 26 tests (up from 23), including a new end-to-end switcher test that sends `/assistant`, then a real question, through the real `agent-switcher` + real `createAssistantOnMessageHandler` + the real M1 fixture snapshot (only the model itself is faked).
+
+**Nothing deferred to the user for the code itself.**
+
+**Next:** M6 (golden-set eval suite) and M7 (demo readiness) are what's left. Both need a live model to actually run against, which this environment doesn't have — scoping how far each can get built and verified without one.
+
+---
+
 ## 2026-09-24 — M4: standalone service, verified live in the browser
 
 **Status:** M4 done and live-tested (minus droplet deployment, which needs real infrastructure this environment doesn't have). New app `apps/assistant-service`.

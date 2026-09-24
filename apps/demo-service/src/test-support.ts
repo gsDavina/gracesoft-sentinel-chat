@@ -112,6 +112,12 @@ export class FakeAiProvider implements AIProvider {
       text: JSON.stringify({
         answer: "fake answer",
         escalate: false,
+        // agent-assistant's own JSON tool-use protocol — a single shared
+        // fake can satisfy Concierge/Cook's `{answer,escalate}` shape and
+        // the Assistant's `{action,text}` shape at once, since each parser
+        // only reads its own known keys and ignores the rest.
+        action: "final_answer",
+        text: "fake answer",
         dishName: "Chicken Rice",
         servings: 2,
         ingredients: ["chicken", "rice"],

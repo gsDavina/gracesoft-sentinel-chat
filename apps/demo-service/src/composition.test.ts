@@ -24,6 +24,11 @@ describe("buildComposition — demo-service", () => {
     DATABASE_URL: "postgres://localhost:5432/db",
     BUSINESS_CONFIG_PATH: resolve(here, "../../../_internal-docs/data/business-config.example.json"),
     DEMO_DEFAULT_AGENT: "concierge",
+    ASSISTANT_ENABLED: false,
+    ASSISTANT_AS_OF_DATE: "2026-09-10",
+    ASSISTANT_MAX_TOOL_STEPS: 6,
+    ASSISTANT_MODEL_TIMEOUT_MS: 15_000,
+    ASSISTANT_MAX_TOKENS_PER_REQUEST: 1024,
     WHATSAPP_ENABLED: false,
     TELEGRAM_ENABLED: true,
     TELEGRAM_BOT_TOKEN: "t",
@@ -43,5 +48,18 @@ describe("buildComposition — demo-service", () => {
   it("also wires the opt-in Mother's Day Edition (Pinecone recipe retrieval) without throwing when configured", () => {
     const composition = buildComposition({ ...env, PINECONE_INDEX_NAME: "recipes", PINECONE_API_KEY: "pc-test" });
     expect(composition.onMessage).toBeInstanceOf(Function);
+  });
+
+  it("also wires the opt-in GraceSoft Assistant without throwing when ASSISTANT_ENABLED=true", () => {
+    const composition = buildComposition({
+      ...env,
+      ASSISTANT_ENABLED: true,
+      ASSISTANT_SNAPSHOT_DIR: resolve(here, "../../../packages/agent-assistant/data/snapshot/valid"),
+    });
+    expect(composition.onMessage).toBeInstanceOf(Function);
+  });
+
+  it("throws (fails boot) when ASSISTANT_ENABLED=true but the snapshot directory is invalid", () => {
+    expect(() => buildComposition({ ...env, ASSISTANT_ENABLED: true, ASSISTANT_SNAPSHOT_DIR: "./does-not-exist" })).toThrow();
   });
 });

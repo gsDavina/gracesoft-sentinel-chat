@@ -141,16 +141,14 @@ gracesoft-assistant/
 
 **Goal:** the same assistant, running inside demo-service.
 
-- [ ] Implement the integration surface agreed in M0, for example one of:
-  - an embeddable module (a Fastify plugin or an Express router exported from `demo-adapter`), or
-  - an HTTP client that demo-service calls, matching its existing request, response and auth conventions.
-- [ ] Map demo-service's session, user and auth model onto the core's session interface.
-- [ ] Adopt demo-service's logging, error format and config conventions.
-- [ ] Namespace routes and config so nothing collides with existing demo-service features.
-- [ ] Feature flag to switch the assistant on or off in demo-service.
-- [ ] Integration test running inside demo-service's test harness.
+- [x] Implement the integration surface agreed in M0: `createAssistantOnMessageHandler` (`apps/demo-service/src/assistant-on-message.ts`) is a `RegisteredAgent` for `agent-switcher`, exactly the shape `createConciergeOnMessageHandler`/`createCookOnMessageHandler` already use — no new demo-adapter package or embeddable module needed, since that pattern already existed and already generalizes to a third agent.
+- [x] Map demo-service's session, user and auth model onto the core's session interface — reuses `agent-assistant`'s own `loadHistory`/`appendTurn` (built on `core`'s `SessionStore`) against demo-service's *existing shared* `RedisSessionStore` instance, keyed `assistant:{channel}:{senderId}` (same per-agent-prefix convention `concierge:`/`cook:`/`switcher:` already use on that one shared store).
+- [x] Adopt demo-service's logging, error format and config conventions — `createLogger("demo-service")`, same Zod-validated-env-with-superRefine pattern as every other flag in `env.ts`.
+- [x] Namespace routes and config so nothing collides with existing demo-service features — no new HTTP routes at all (the switcher pattern needs none); every new env var is `ASSISTANT_`-prefixed; the trigger words `/assistant`/`assistant` don't collide with `/concierge`/`concierge`/`/cook`/`cook`.
+- [x] Feature flag to switch the assistant on or off in demo-service — `ASSISTANT_ENABLED` (default `false`), mirroring `WHATSAPP_ENABLED`/`TELEGRAM_ENABLED`/Pinecone's own opt-in shape. Off: `buildAssistantAgent` returns `undefined`, nothing is added to the switcher's `agents` array, `ASSISTANT_SNAPSHOT_DIR` isn't even required.
+- [x] Integration test running inside demo-service's test harness — extended `switcher-integration.test.ts` (real `agent-switcher` + real `createAssistantOnMessageHandler` + the real M1 fixture snapshot, only the model is faked) and `composition.test.ts` (wires without throwing when enabled; fails boot loudly on a bad snapshot dir).
 
-**Exit criteria:** demo-service starts with the assistant enabled, the golden set passes through demo-service's entry point, and switching the flag off removes it cleanly.
+**Exit criteria:** demo-service starts with the assistant enabled, the golden set passes through demo-service's entry point, and switching the flag off removes it cleanly. **Partially met**: starting with the assistant enabled, switching via `/assistant`, and the flag-off path removing it cleanly are all verified by the tests above (26 demo-service tests green, full workspace build/typecheck/lint/boundaries clean). The golden set itself doesn't exist yet — that's M6.
 
 ## M6: Evaluation suite
 
