@@ -9,3 +9,4 @@
 - [ ] Feature: Link Adapter
 - [ ] Feature: User Data Deletion
 - [ ] Demo: Service map
+- [x] Demo: GraceSoft Assistant (Desk/Skylight Q&A) — M0-M7 built and tested; see `08-assistant-progress-log.md`. Pending: a live `OPENAI_API_KEY` (eval pass rate, real answers) and droplet/HTTPS deployment.
