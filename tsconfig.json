@@ -5,6 +5,7 @@
     { "path": "packages/agent-concierge" },
     { "path": "packages/agent-cook" },
     { "path": "packages/agent-assistant" },
+    { "path": "apps/assistant-service" },
     { "path": "packages/channel-whatsapp" },
     { "path": "packages/channel-telegram" },
     { "path": "packages/provider-ai-openai" },

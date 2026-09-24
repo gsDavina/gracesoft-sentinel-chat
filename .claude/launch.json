@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--yes", "serve", "docs", "-l", "4321"],
       "port": 4321
+    },
+    {
+      "name": "assistant-service",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--env-file=apps/assistant-service/.env", "apps/assistant-service/dist/index.js"],
+      "port": 3004
     }
   ]
 }

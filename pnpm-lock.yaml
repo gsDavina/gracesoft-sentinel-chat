@@ -39,6 +39,46 @@ importers:
         specifier: ^3.0.4
         version: 3.2.7(@types/node@18.19.130)
 
+  apps/assistant-service:
+    dependencies:
+      '@gracesoft-sentinel/agent-assistant':
+        specifier: workspace:*
+        version: link:../../packages/agent-assistant
+      '@gracesoft-sentinel/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@gracesoft-sentinel/logging':
+        specifier: workspace:*
+        version: link:../../packages/logging
+      '@gracesoft-sentinel/provider-ai-openai':
+        specifier: workspace:*
+        version: link:../../packages/provider-ai-openai
+      express:
+        specifier: ^4.19.2
+        version: 4.22.2
+      express-rate-limit:
+        specifier: ^7.4.1
+        version: 7.5.1(express@4.22.2)
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@gracesoft-sentinel/config-eslint':
+        specifier: workspace:*
+        version: link:../../packages/config-eslint
+      '@gracesoft-sentinel/config-tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/config-tsconfig
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.4
+        version: 3.2.7(@types/node@18.19.130)
+
   apps/concierge-service:
     dependencies:
       '@gracesoft-sentinel/agent-concierge':

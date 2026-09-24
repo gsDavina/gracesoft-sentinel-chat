@@ -4,6 +4,35 @@ Companion to `08-assistant-milestone.md` and `08-assistant-test-checklist.md.md`
 
 ---
 
+## 2026-09-24 — M4: standalone service, verified live in the browser
+
+**Status:** M4 done and live-tested (minus droplet deployment, which needs real infrastructure this environment doesn't have). New app `apps/assistant-service`.
+
+**One deliberate deviation from the milestone doc, recorded there too:** the doc says "Fastify app wrapping `core`". Every other app in this repo (`concierge-service`, `cook-service`, `demo-service`) is Express. Matching the repo's existing framework beats introducing a second one for a single app — nothing in M4's actual requirements (the routes, SSE, auth, rate limits) needs Fastify specifically. Decided and documented in `08-assistant-milestone.md`'s M4 section and open question #1.
+
+**A second, more fundamental deviation:** `AIProvider.chatComplete` (the interface every agent in this repo depends on) has no streaming capability at all — not a missing flag, genuinely no method that returns partial output. So `POST /chat`'s SSE mode isn't token-level streaming; it runs the full `runAssistant()` loop to completion and sends the finished answer as one SSE event. This gives the UI a streaming-shaped transport without lying about what it does — the alternative (adding a `streamChatComplete` capability to core's `AIProvider`) would touch every existing agent's provider contract for one new app, which is out of scope here and flagged as a possible future core enhancement rather than done silently.
+
+**What was built:**
+- `src/env.ts` — Zod-validated config (`OPENAI_API_KEY`, `OPENAI_MODEL`, `SNAPSHOT_DIR`, `AS_OF_DATE`, `DEMO_TOKEN`, tool-loop limits, rate limits, daily call cap), same fail-fast-with-the-key-named pattern as every other service's `env.ts`.
+- `src/in-memory-session-store.ts` — implements `core`'s `SessionStore` interface directly (TTL-aware `Map`), so a single-process demo needs no Redis at all; swapping in `RedisSessionStore` later for a multi-instance deployment is a one-line composition change, not a rewrite.
+- `src/daily-call-cap.ts` — a UTC-day call counter standing in for a real spend cap, since `AIProvider` exposes no token usage or pricing to compute actual cost from. Documented as an approximation everywhere it's referenced, not silently passed off as real cost tracking.
+- `src/session-rate-limiter.ts` — a small in-memory sliding window for the *per-session* limit the milestone doc asks for, alongside `express-rate-limit`'s existing per-IP pattern (copied from `cook-service`'s `webhookRateLimiter`).
+- `src/composition.ts` — the composition root: loads the snapshot once at boot (`loadSnapshot` — fails fast, before the process ever calls `app.listen`, if the snapshot is bad), builds `OpenAIProvider`, wires everything into `src/chat-handler.ts`'s `createChatHandler` (loads session history → `runAssistant` → records the tool-call cap → persists the turn → structured per-request log).
+- `src/server.ts` — `GET /health` (503 until ready, 200 after — this service's own convention, since the milestone doc's API bullet doesn't separate health/readiness the way other apps do), `GET /meta`, `POST /chat` (bearer-token auth, per-IP + per-session rate limits, 400 on missing/empty/oversized input, JSON or SSE response), `POST /sessions/:id/reset`.
+- `public/index.html` + `app.js` + `style.css` — a small vanilla-JS chat UI, no build step, no framework: a token-gate (paste-once, stored in `localStorage`), starter-question chips, a message list, and an input form. Every message renders via `textContent`, never `innerHTML` — nothing from a tool result or the model can execute as markup, which is the same snapshot-injection concern M1/M3 guard against elsewhere in the pipeline, so the UI had to hold that line too rather than reaching for a Markdown-rendering library that would reopen it.
+
+**Live-verified in the browser pane** (`.claude/launch.json` gained an `assistant-service` entry; ran against the real M1 fixture snapshot with a placeholder, non-working `OPENAI_API_KEY` — no real key exists in this environment): the token gate, scope banner ("Data: 2026-07-10 to 2026-09-10, redacted (as of 2026-09-10)", populated live from `/meta`), "Demo data" badge, and starter-question chips all render correctly; clicking a starter question sends it, shows "Thinking...", and — because the API key is fake — correctly exercises the full failure path end to end: OpenAI auth error → the orchestrator's retry/timeout wrapper catching it without crashing → "I'm having trouble reaching the model right now — please try again in a moment." rendered inline, chat still usable, network request logged as `200 OK` (the graceful message is a successful response, not a 500). Reproduced at 375px mobile width with no horizontal scroll. Server logs confirmed the structured per-request log line (`sessionId`, `question`, `steps`, `toolCallCount`, `gracefulFailure`, `latencyMs`) and the boot-time snapshot-load summary with its three warnings. Screenshots aren't reproduced here; this was interactive browser verification, not a saved artifact.
+
+**What's explicitly deferred, and why:** droplet deployment, systemd, HTTPS (needs real infrastructure and a domain — the user's to provision) and an actual **correct answer** from a starter question (needs a real `OPENAI_API_KEY` — this environment has none). Both are called out as unchecked-with-a-note in `08-assistant-test-checklist.md.md` rather than silently skipped.
+
+**Verified locally (all green):** `pnpm --filter @gracesoft-sentinel/assistant-service test` (30 tests across env/composition/chat-handler/server/session-store/rate-limiter/call-cap), `typecheck`, `lint` (needed one addition: `eslint.config.js` scoped to this package, ignoring `public/**` — the root Node-oriented ESLint config doesn't know about browser globals like `document`/`fetch`/`localStorage`, and `public/app.js` isn't part of the TypeScript build anyway).
+
+**Nothing deferred to the user for the code itself.** What genuinely is the user's: a real `OPENAI_API_KEY` to see actual answers, and the droplet/domain/HTTPS to actually deploy this.
+
+**Next:** M5 (demo-service integration) and M6 (eval suite) are the remaining milestones — both are larger, more ops/eval-dependent pieces than M0-M4. Scoping those next.
+
+---
+
 ## 2026-09-24 — M3: LLM orchestration (tool catalog, system prompt, tool-use loop, session memory)
 
 **Status:** M3 done and unit-tested against a scripted model. Continuing straight on to M4 in the same session.

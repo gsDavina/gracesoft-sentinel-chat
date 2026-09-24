@@ -126,16 +126,16 @@ gracesoft-assistant/
 
 **Goal:** the assistant runs on its own and can be demoed by URL.
 
-- [ ] Fastify app wrapping `core`:
-  - `POST /chat`: takes a message and session ID, returns the answer and metadata. Streams by SSE.
-  - `GET /health` and `GET /meta` (snapshot span, as-of date, record counts, model).
+- [x] Express app wrapping `core` (**deviates from "Fastify"** — every other app in this repo, `concierge-service`/`cook-service`/`demo-service`, is Express; matching that beats introducing a second web framework into the monorepo for one app. Behavior, not framework, is what M5/M6 depend on):
+  - `POST /chat`: takes a message and session ID, returns the answer and metadata. SSE when requested (`?stream=1` or `Accept: text/event-stream`) — **not token-level streaming**, since `AIProvider` has no streaming capability anywhere in this repo; it sends the finished answer as one SSE event, honestly labelled as such in the code (`src/server.ts`).
+  - `GET /health` (this service's own convention: 503 until the snapshot has loaded, 200 after — tested via an injectable `isReady`) and `GET /meta` (snapshot span, as-of date, record counts, model).
   - `POST /sessions/:id/reset`.
-- [ ] Minimal chat UI: suggested starter questions, a snapshot-scope banner ("Data: 10 Jul to 10 Sep 2026, redacted") and a visible "Demo data" label.
-- [ ] Access control: a demo token or basic auth, plus per-IP and per-session rate limits and a daily spend cap.
-- [ ] Config by env (model, as-of date, snapshot path, limits), with validation on boot.
-- [ ] Deploy to the droplet under systemd (no Docker), behind HTTPS, with the snapshot loaded at start.
+- [x] Minimal chat UI (`public/index.html`, `app.js`, `style.css`, vanilla JS, no build step): suggested starter questions, a snapshot-scope banner ("Data: 10 Jul to 10 Sep 2026, redacted") and a visible "Demo data" label. Verified live in-browser at both desktop and phone width — see the M4 progress log entry for screenshots/behavior.
+- [x] Access control: a demo bearer token (`DEMO_TOKEN`, resolving open question #5 as the default), plus per-IP (`express-rate-limit`) and per-session (`SessionRateLimiter`) rate limits and a daily cap on model calls (`DailyCallCap` — a proxy for "spend cap": `AIProvider` exposes no token usage/pricing to compute real cost from, documented as an approximation).
+- [x] Config by env (model, as-of date, snapshot path, limits), with validation on boot (`src/env.ts`, Zod, fails with the missing key named).
+- [ ] Deploy to the droplet under systemd (no Docker), behind HTTPS, with the snapshot loaded at start. **Not done — needs the actual droplet, a domain/HTTPS cert and an `OPENAI_API_KEY`, none of which exist in this environment.** The service itself is deploy-ready (`pnpm build && pnpm start`, config entirely by env); this is ops work for the user.
 
-**Exit criteria:** a fresh deploy answers every starter question correctly from a browser, and limits trigger as configured.
+**Exit criteria:** a fresh deploy answers every starter question correctly from a browser, and limits trigger as configured. **Partially verified**: ran the service live in the browser pane against the real fixture snapshot and a placeholder (non-working) `OPENAI_API_KEY` — the UI, starter questions, scope banner, phone-width layout, and the graceful-failure path (fake key → OpenAI auth error → retried → "I'm having trouble reaching the model right now" rendered inline, chat still usable) all confirmed working end to end; structured per-request logs confirmed in the server output. What's *not* verified is a starter question actually being answered correctly, since that needs a real `OPENAI_API_KEY` this environment doesn't have.
 
 ## M5: Demo-service integration build
 
