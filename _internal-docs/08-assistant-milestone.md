@@ -154,12 +154,12 @@ gracesoft-assistant/
 
 **Goal:** prove the answers are right and catch regressions.
 
-- [ ] Golden set of 40–60 questions spread across Desk time, Desk finance, Skylight, cross-tool, out-of-range, redaction and adversarial cases (see `test-checklist.md`).
-- [ ] Expected answers generated from the query layer (not written by hand), with a numeric tolerance of zero.
-- [ ] Eval runner: calls the full stack and checks numbers, entities, the period used and the required caveats, then reports pass rate, latency and cost.
-- [ ] Run in CI on every change to prompts, tools or core.
+- [x] Golden set of 40–60 questions spread across Desk time, Desk finance, Skylight, cross-tool, out-of-range, redaction and adversarial cases (see `test-checklist.md`). — 40 questions, `packages/agent-assistant/src/evals/golden-set.ts`, `buildGoldenSet(ctx)`.
+- [x] Expected answers generated from the query layer (not written by hand), with a numeric tolerance of zero. — every numeric `mustIncludeAll` fragment is computed by calling the same `time`/`finance`/`skylight`/`cross-tool` functions the assistant's own tools wrap, at eval-build time, against the live `QueryContext` — never hand-typed. (Guardrail categories — out-of-range/redaction/injection/misuse — check required *phrasing*, not numbers, matching the checklist's own table for those rows.)
+- [x] Eval runner: calls the full stack and checks numbers, entities, the period used and the required caveats, then reports pass rate, latency and cost. — `runGoldenSet()` (`src/evals/eval-runner.ts`) runs every question through the real `runAssistant()` loop, grades by substring match (zero tolerance: any missing/forbidden fragment or graceful-failure fallback is a fail), reports overall + per-category pass rate and latency percentiles. **Cost is not reported** — `AIProvider` exposes no token usage, so there's nothing to compute it from (same limitation as M4's spend-cap proxy).
+- [ ] Run in CI on every change to prompts, tools or core. **Not done — needs a live `OPENAI_API_KEY` in CI, which doesn't exist yet.** The runner and CLI (`apps/assistant-service`'s `pnpm eval`) are ready to be wired into a CI step the moment a key is available; wiring it in without a key would just fail every run.
 
-**Exit criteria:** at least 95% pass on the golden set, 100% on the out-of-range, redaction and injection cases.
+**Exit criteria:** at least 95% pass on the golden set, 100% on the out-of-range, redaction and injection cases. **Not measurable yet** — needs a live model. What *is* verified: the grading mechanism itself (11 tests against a scripted fake model prove pass/fail/category-aggregation/history-forwarding all work correctly), and that the golden set itself is well-formed (40 questions, every category represented, every question has at least one real checkable requirement, ids are unique/sequential).
 
 ## M7: Demo readiness
 

@@ -4,6 +4,23 @@ Companion to `08-assistant-milestone.md` and `08-assistant-test-checklist.md.md`
 
 ---
 
+## 2026-09-24 — M6: golden-set eval suite (grading mechanism verified; live pass rate still needs a real model)
+
+**Status:** M6's *mechanism* is done, tested, and CLI-ready. The thing M6 actually exists to prove — a real pass rate against a real model — genuinely can't be produced in this environment, since there's no `OPENAI_API_KEY` available. Recorded honestly as unmeasured rather than faked or skipped silently.
+
+**What was built:**
+- `packages/agent-assistant/src/evals/golden-set.ts` — `buildGoldenSet(ctx)`, 40 questions (the checklist's original 24-row table plus 16 more) across every required category (Desk time, Desk finance, Skylight, cross-tool, out-of-range, redaction, prompt injection, user misuse, conversation/follow-up). The important design choice, matching M6's "expected answers generated from the query layer, not written by hand" requirement literally: every numeric `mustIncludeAll` fragment is computed by *calling* `hoursForPeriod`/`billableValueForPeriod`/`cashPosition`/`overdueCards`/etc. against the live fixture `QueryContext` inside `buildGoldenSet` itself, not hand-typed as a literal — if the fixture or the query layer ever changes, the golden set's expectations move with it automatically instead of silently drifting stale. Guardrail-category questions (out-of-range/redaction/injection/misuse) check required *phrasing* instead (e.g. "outside the snapshot", "redact"), since there's no numeric ground truth to derive for "declines to de-redact."
+- `packages/agent-assistant/src/evals/eval-runner.ts` — `runGoldenSet()`: runs every question through the real `runAssistant()` tool-use loop and grades the answer by case-insensitive substring match, zero tolerance — every `mustIncludeAll` fragment must be present, every `mustNotIncludeAny` fragment must be absent, and a graceful-failure fallback is always a fail even with no fragment requirements. Reports overall pass rate, per-category pass rate, and median/p95 latency. **Doesn't report cost** — `AIProvider` (`packages/core`) exposes no token usage or pricing anywhere in this repo, the same gap M4's `DailyCallCap` already had to work around with a call-count proxy; there's nothing to compute a real per-question cost from.
+- `apps/assistant-service/src/eval-cli.ts` (`pnpm eval`) — the actual command-line entry point the milestone doc's M3 exit criterion and M6 goal both ask for. Deliberately lives in `assistant-service`, not in `agent-assistant`: wiring a concrete `OpenAIProvider` into the eval set needs a real provider package, and `agent-assistant` is bound by this repo's own enforced dependency-cruiser rule (`no-agent-to-channel-or-provider`) to depend only on `core`'s provider interface, never a concrete implementation — the same boundary every other `agent-*` package already respects. Exits non-zero below a configurable pass threshold, so it's CI-gateable the moment a key exists.
+
+**Verified locally (all green):** 11 new tests (5 `golden-set.test.ts`, 6 `eval-runner.test.ts`) — the golden set is well-formed (≥40 questions, every category present, every question has a real checkable requirement, unique/sequential ids, conversational cases carry real seeded history) and the grading logic itself is correct, checked against `ScriptedAIProvider` (reused from M3's orchestrator tests) with deliberately-passing, deliberately-failing (missing fragment / forbidden fragment / graceful-failure), and mixed-category answers. Full workspace `pnpm -r run test`/`typecheck`/`lint`, `pnpm boundaries` (0 violations, 762 modules/1,774 dependencies), `pnpm build` all clean.
+
+**What's genuinely deferred to the user:** a real `OPENAI_API_KEY` to actually run `pnpm eval` and get a pass rate, latency numbers, and per-category breakdown against a live model — everything M6's exit criteria (≥95% overall, 100% on out-of-range/redaction/injection) actually measure.
+
+**Next:** M7 (demo readiness) — most of it (demo script, README accuracy, a final redaction sweep) doesn't need a live model and can be done now; warm-up-on-start and the live-model-down fallback do.
+
+---
+
 ## 2026-09-24 — M5: demo-service integration (third agent behind the switcher)
 
 **Status:** M5 done. No new package, no new HTTP surface — the existing `agent-switcher` pattern (`RegisteredAgent { name, label, triggers, onMessage }`) already generalizes cleanly to a third agent, which is exactly what M0's resolved open question #1 predicted back when M0-M2 landed.

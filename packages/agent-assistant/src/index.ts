@@ -14,3 +14,5 @@ export * from "./tools/definitions.js";
 export * from "./orchestrator/orchestrator.js";
 export * from "./orchestrator/system-prompt.js";
 export * from "./session/assistant-session.js";
+export * from "./evals/golden-set.js";
+export * from "./evals/eval-runner.js";

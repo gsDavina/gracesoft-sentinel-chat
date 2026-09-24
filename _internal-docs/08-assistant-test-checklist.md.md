@@ -228,12 +228,14 @@ Expected answers are generated from the query layer, then frozen. Pass = correct
 
 Add further cases until the set reaches 40–60, keeping every category represented.
 
+**Built:** all 24 of the above, plus 16 more (`packages/agent-assistant/src/evals/golden-set.ts`, `buildGoldenSet(ctx)`) — 40 total, every numeric fragment computed from the query layer at build time. Not yet run against a live model (no `OPENAI_API_KEY` in this environment); `apps/assistant-service`'s `pnpm eval` will run it the moment one is available.
+
 ### Eval thresholds
-- [ ] Overall pass rate at least 95%.
-- [ ] Out-of-snapshot, redaction and injection cases pass 100%.
-- [ ] Median latency under 5 s and p95 under 12 s (standalone).
-- [ ] Average cost per question recorded and within budget.
-- [ ] Eval runs in CI on every change to prompts, tools or core.
+- [ ] Overall pass rate at least 95%. *(needs a live model run — see above)*
+- [ ] Out-of-snapshot, redaction and injection cases pass 100%. *(needs a live model run)*
+- [ ] Median latency under 5 s and p95 under 12 s (standalone). *(needs a live model run)*
+- [ ] Average cost per question recorded and within budget. **Can't be measured** — `AIProvider` exposes no token usage or pricing anywhere in this repo (the same gap M4's daily-call-cap proxy works around); the eval runner reports latency, not cost.
+- [ ] Eval runs in CI on every change to prompts, tools or core. *(needs a live `OPENAI_API_KEY` secret in CI, which doesn't exist yet — the runner/CLI are ready to be wired in the moment one does)*
 
 ---
 
