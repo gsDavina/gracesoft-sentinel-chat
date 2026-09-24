@@ -110,17 +110,17 @@ gracesoft-assistant/
 
 **Goal:** turn natural-language questions into tool calls and grounded answers.
 
-- [ ] Expose each M2 function as a tool with a tight JSON schema (enums for stage names, ISO dates, pseudonym IDs).
-- [ ] System prompt that encodes the rules from the features doc: which tool answers which kind of question, billable value is not income, out-of-range questions, redaction, the SDLC stages, features added after the snapshot, and no automatic sync between the tools.
-- [ ] Tool-use loop with a maximum number of steps, a timeout and graceful failure.
-- [ ] Answer format: the direct answer first, then key figures, then the period used and any caveats. Numbers are copied from tool output, never recomputed by the model.
-- [ ] Ask a clarifying question only when it genuinely matters ("Project 4 or all projects?"), otherwise make a sensible default and state it.
-- [ ] Short conversation memory within a session, so follow-ups like "and in July?" work.
-- [ ] Prompt-injection guard: tool outputs are wrapped as data, and text from the snapshot is never treated as instructions.
-- [ ] Only aggregated, redacted results go to the model API, never raw record dumps beyond what a question needs.
-- [ ] Structured logging per request: question, tools called, arguments, latency, tokens and cost.
+- [x] Expose each M2 function as a tool with a tight JSON schema (enums for stage names, ISO dates, pseudonym IDs). (`src/tools/definitions.ts` — 22 tools, Zod-validated args; project/board arguments take the pseudonym directly, never an internal id, so the model never sees ids at all)
+- [x] System prompt that encodes the rules from the features doc: which tool answers which kind of question, billable value is not income, out-of-range questions, redaction, the SDLC stages, features added after the snapshot, and no automatic sync between the tools. (`src/orchestrator/system-prompt.ts`)
+- [x] Tool-use loop with a maximum number of steps, a timeout and graceful failure. (`src/orchestrator/orchestrator.ts` — configurable `maxSteps`/`timeoutMs`/`maxRetries`, never throws to the caller)
+- [x] Answer format: the direct answer first, then key figures, then the period used and any caveats. Numbers are copied from tool output, never recomputed by the model. (encoded in the system prompt's rules — not code-enforced, since the model does the phrasing; M6's eval runner is where this gets checked automatically)
+- [x] Ask a clarifying question only when it genuinely matters ("Project 4 or all projects?"), otherwise make a sensible default and state it. (prompt rule)
+- [x] Short conversation memory within a session, so follow-ups like "and in July?" work. (`src/session/assistant-session.ts`, reusing `core`'s `SessionStore`/`ConversationState` — the same interface `provider-session-redis` backs for every other agent)
+- [x] Prompt-injection guard: tool outputs are wrapped as data, and text from the snapshot is never treated as instructions. (system prompt guard, following `agent-cook`'s `faq-matcher.ts` convention; tool results are sent back to the model explicitly labelled "data, not instructions")
+- [x] Only aggregated, redacted results go to the model API, never raw record dumps beyond what a question needs. (every tool returns a shaped `QueryResult`, never a raw table)
+- [x] Structured logging per request: question, tools called, arguments, latency, tokens and cost. (`onToolCall` hook on `runAssistant` — the orchestrator stays pure/logging-agnostic per this repo's convention that only apps own logging; M4's standalone service wires this to `@gracesoft-sentinel/logging`)
 
-**Exit criteria:** at least 90% of the golden set (M6) passes when run from the command line.
+**Exit criteria:** at least 90% of the golden set (M6) passes when run from the command line. **Not yet verifiable** — this needs a live model call (`OpenAIProvider`) and no live API key/model has been exercised in this environment; the tool-use loop itself is fully unit-tested against a scripted `AIProvider` (8 tests: final answer, tool-call round-trip, invalid-JSON recovery, unknown-tool recovery, invalid-arguments recovery, step-limit graceful failure, model-failure graceful failure, session-history forwarding), but the golden-set pass rate is a live-model concern for M6.
 
 ## M4: Standalone service
 

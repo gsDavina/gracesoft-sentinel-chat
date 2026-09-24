@@ -95,30 +95,30 @@ Run against a small hand-built fixture with hand-calculated answers.
 ## 3. LLM orchestration (M3)
 
 ### Tool selection
-- [ ] Hours, billable, spent, earned and cash questions call Desk tools only.
-- [ ] Overdue, to do, done, checklist and "what's left" questions call Skylight tools only.
-- [ ] Project-performance questions call both.
-- [ ] Tool arguments are valid (ISO dates, known stage enums, existing pseudonyms).
-- [ ] An unknown pseudonym ("Project 99") gets a "no such project in the snapshot" answer, not a made-up one.
+- [ ] Hours, billable, spent, earned and cash questions call Desk tools only. *(needs a live model — see note below)*
+- [ ] Overdue, to do, done, checklist and "what's left" questions call Skylight tools only. *(needs a live model)*
+- [ ] Project-performance questions call both. *(needs a live model)*
+- [x] Tool arguments are valid (ISO dates, known stage enums, existing pseudonyms) — enforced structurally: every tool's `argsSchema` is Zod-validated before it runs, independent of the model (`src/tools/definitions.test.ts`).
+- [x] An unknown pseudonym ("Project 99") gets a "no such project in the snapshot" answer, not a made-up one — tested at the tool layer (`resolveProjectId`/`resolveBoardId` return a caveat, never fabricated data).
 
 ### Answer correctness
-- [ ] Every number in the answer appears in the tool output (automated check).
-- [ ] The answer states the period actually used, including when it was clipped.
-- [ ] Billable value is never described as money received.
-- [ ] Partial periods ("this month") are labelled as partial.
-- [ ] Ambiguous questions get either one short clarifying question or a stated default, not both.
+- [ ] Every number in the answer appears in the tool output (automated check). *(this is M6's eval-runner job, once there's a live model to run against)*
+- [ ] The answer states the period actually used, including when it was clipped. *(needs a live model)*
+- [ ] Billable value is never described as money received. *(needs a live model — the rule is encoded in the system prompt)*
+- [ ] Partial periods ("this month") are labelled as partial. *(needs a live model)*
+- [ ] Ambiguous questions get either one short clarifying question or a stated default, not both. *(needs a live model)*
 
 ### Conversation
-- [ ] "What about July?" after an August question re-runs the same query for July.
-- [ ] "And for Project 2?" after a Project 4 question switches project and keeps the period.
-- [ ] Session reset clears the context.
-- [ ] Separate sessions don't leak context into each other.
+- [ ] "What about July?" after an August question re-runs the same query for July. *(needs a live model — the mechanism (session history is forwarded to every call) is unit-tested; the model actually re-deriving "July" from context is not)*
+- [ ] "And for Project 2?" after a Project 4 question switches project and keeps the period. *(needs a live model)*
+- [x] Session reset clears the context. (`src/session/assistant-session.test.ts`)
+- [x] Separate sessions don't leak context into each other. (`src/session/assistant-session.test.ts`)
 
 ### Limits and failures
-- [ ] Tool loop stops at the maximum step count and returns a graceful message.
-- [ ] Model API timeout or 5xx returns a friendly error, and the service stays up.
-- [ ] Model API 429 is retried with backoff, then fails gracefully.
-- [ ] Per-request token cap is enforced.
+- [x] Tool loop stops at the maximum step count and returns a graceful message. (`src/orchestrator/orchestrator.test.ts`)
+- [x] Model API timeout or 5xx returns a friendly error, and the service stays up (never throws to the caller).
+- [x] A failing model call is retried with backoff, then fails gracefully — tested generically against any thrown error, since `AIProvider` doesn't expose HTTP status codes to distinguish a 429 specifically; a live-provider-level 429 test is a `provider-ai-openai` concern, not this package's.
+- [x] Per-request token cap is enforced — `maxTokens` is threaded into every `chatComplete` call (`DEFAULT_ORCHESTRATOR_CONFIG.maxTokens`).
 
 ---
 

@@ -4,6 +4,29 @@ Companion to `08-assistant-milestone.md` and `08-assistant-test-checklist.md.md`
 
 ---
 
+## 2026-09-24 — M3: LLM orchestration (tool catalog, system prompt, tool-use loop, session memory)
+
+**Status:** M3 done and unit-tested against a scripted model. Continuing straight on to M4 in the same session.
+
+**The core design problem:** this repo's `AIProvider` interface (`packages/core/src/ai-provider.ts`) has no function-calling/tool-use support — `chatComplete` just takes messages and returns text. Every existing agent works around this with a one-shot "respond with this exact JSON shape" prompt (`agent-cook`'s `faq-matcher.ts`). M3 needed a genuine multi-step tool-use *loop*, which doesn't exist anywhere in the repo yet, so this generalizes that same JSON-protocol convention rather than reaching for OpenAI's native function-calling (which would tie the assistant to one provider and break the `AIProvider` abstraction every other agent depends on).
+
+**What was built:**
+- `src/tools/definitions.ts` — 22 tools wrapping the M2 query layer (`get_hours_for_period`, `get_project_health`, `get_overdue_cards`, `search_cards`, etc., plus `list_projects_and_boards` so the model can sanity-check a name before answering). Every tool takes the **pseudonym** the user actually said ("Project 4"), never an internal id — the model never sees an id at all. Each tool carries its own Zod `argsSchema`; a `tool()` helper erases the per-tool `Args` generic into a uniform `{ validate(raw): ToolValidation, run(ctx, args): QueryResult }` shape so a heterogeneous array of tools type-checks without resorting to `any` (the first draft used `ToolDefinition<Args>[]` directly and hit TypeScript's contravariant function-parameter check on `run` — fixed by moving the cast inside a single contained closure per tool instead of trying to make the array itself covariant).
+- `src/orchestrator/system-prompt.ts` — encodes every rule from the milestone doc's "Guiding principles" (no arithmetic, snapshot-time not wall-clock, stay inside the snapshot, pseudonyms are final, billable value ≠ income, no auto-sync between tools, read-only, answer-format), plus a prompt-injection guard modeled directly on `faq-matcher.ts`'s `PROMPT_INJECTION_GUARD` constant, and the full tool catalog rendered as text.
+- `src/orchestrator/orchestrator.ts` — `runAssistant()`: the tool-use loop. Protocol is `{"action":"call_tool",...}` / `{"action":"final_answer",...}` JSON only. Each step: call the model (with a timeout + exponential-backoff retry that never throws out to the caller), parse the JSON defensively, and either execute the named tool (validating args first, feeding a corrective message back on bad JSON/unknown tool/bad args so the model can self-correct rather than the whole request failing) or return the final answer. Hits `maxSteps` → graceful "try a narrower question" message, not a crash; exhausts retries → graceful "trouble reaching the model" message, not a thrown error. `onToolCall` is a plain callback (question/tool/args/latency), not a hard dependency on `@gracesoft-sentinel/logging` — matches the existing convention that agent packages stay logging-agnostic and only apps own logging (`cook-service`'s `on-message.ts` is where that wiring actually happens); M4 will pass a callback that logs via `createLogger("assistant-service")`.
+- `src/session/assistant-session.ts` — short conversation memory, built on `core`'s existing `SessionStore`/`ConversationState` (the same interface `provider-session-redis` already backs for `agent-cook`/`agent-concierge`) rather than inventing a new persistence abstraction. `loadHistory`/`appendTurn`/`resetSession`, capped to the last 10 turns so history can't grow the prompt unboundedly across a long session.
+- `src/orchestrator/test-support.ts` — `ScriptedAIProvider`, a queued-response fake `AIProvider` (mirrors `provider-ai-openai`'s own mocked-fetch test convention) so the whole loop — multi-step tool calls, malformed-JSON recovery, unknown-tool recovery, bad-argument recovery, step-limit exhaustion, retry-then-fail, and session-history forwarding — is fully covered without any live model call or API key.
+
+**What's explicitly deferred, and why:** the milestone's M3 exit criterion ("90% of the golden set passes from the command line") and most of the test checklist's "Tool selection"/"Answer correctness"/"Conversation" sections need a live model actually choosing tools and phrasing answers — that's inherently not unit-testable against a scripted fake. Recorded as unchecked-with-a-note in `08-assistant-test-checklist.md.md` rather than silently skipped; it becomes exercisable once M4's standalone service is wired to a real `OpenAIProvider` with an API key, which is the user's to provide.
+
+**Verified locally (all green):** `pnpm --filter @gracesoft-sentinel/agent-assistant test` (94 tests total, 21 new: 8 tool-definition + 8 orchestrator + 5 session-memory), `typecheck`, `lint` — clean.
+
+**Nothing deferred to the user for the code itself** — no live credentials used or needed for any of this session's testing.
+
+**Next:** M4 — a minimal standalone service so the assistant can actually be run and talked to.
+
+---
+
 ## 2026-09-24 — M0-M2: scaffolding, snapshot ingestion, deterministic query layer
 
 **Status:** New package `packages/agent-assistant`. Milestones M0, M1 and M2 done and tested; M3 (LLM orchestration) is next.
