@@ -47,11 +47,23 @@ export const DemoServiceEnvSchema = z
      * nothing registered with the switcher.
      */
     ASSISTANT_ENABLED: booleanFromEnvString,
+    /** Structured mode (default): required unless ASSISTANT_PINECONE_INDEX_NAME is set. */
     ASSISTANT_SNAPSHOT_DIR: z.string().optional(),
     ASSISTANT_AS_OF_DATE: z.string().date().default("2026-09-10"),
     ASSISTANT_MAX_TOOL_STEPS: z.coerce.number().int().positive().default(6),
     ASSISTANT_MODEL_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
     ASSISTANT_MAX_TOKENS_PER_REQUEST: z.coerce.number().int().positive().default(1024),
+
+    /**
+     * Pinecone-search mode for the Assistant: swaps its structured query
+     * layer for semantic search over an existing MySQL→Pinecone index (see
+     * packages/ingest-mysql-pinecone) instead of ASSISTANT_SNAPSHOT_DIR.
+     * Deliberately separate from the PINECONE_* vars below (Cook's own,
+     * unrelated recipe index) — different index/namespace, never conflated.
+     */
+    ASSISTANT_PINECONE_API_KEY: z.string().optional(),
+    ASSISTANT_PINECONE_INDEX_NAME: z.string().optional(),
+    ASSISTANT_PINECONE_NAMESPACE: z.string().optional(),
 
     /**
      * "Mother's Day Edition" (opt-in): personal recipe retrieval via RAG,
@@ -93,8 +105,11 @@ export const DemoServiceEnvSchema = z
     if (env.PINECONE_INDEX_NAME && !env.PINECONE_API_KEY) {
       ctx.addIssue({ code: "custom", path: ["PINECONE_API_KEY"], message: "PINECONE_API_KEY is required when PINECONE_INDEX_NAME is set" });
     }
-    if (env.ASSISTANT_ENABLED && !env.ASSISTANT_SNAPSHOT_DIR) {
-      ctx.addIssue({ code: "custom", path: ["ASSISTANT_SNAPSHOT_DIR"], message: "ASSISTANT_SNAPSHOT_DIR is required when ASSISTANT_ENABLED=true" });
+    if (env.ASSISTANT_ENABLED && !env.ASSISTANT_SNAPSHOT_DIR && !env.ASSISTANT_PINECONE_INDEX_NAME) {
+      ctx.addIssue({ code: "custom", path: ["ASSISTANT_SNAPSHOT_DIR"], message: "ASSISTANT_SNAPSHOT_DIR is required when ASSISTANT_ENABLED=true, unless ASSISTANT_PINECONE_INDEX_NAME is set" });
+    }
+    if (env.ASSISTANT_PINECONE_INDEX_NAME && !env.ASSISTANT_PINECONE_API_KEY) {
+      ctx.addIssue({ code: "custom", path: ["ASSISTANT_PINECONE_API_KEY"], message: "ASSISTANT_PINECONE_API_KEY is required when ASSISTANT_PINECONE_INDEX_NAME is set" });
     }
     if (env.DEMO_DEFAULT_AGENT === "assistant" && !env.ASSISTANT_ENABLED) {
       ctx.addIssue({ code: "custom", path: ["DEMO_DEFAULT_AGENT"], message: "DEMO_DEFAULT_AGENT can't be \"assistant\" unless ASSISTANT_ENABLED=true" });

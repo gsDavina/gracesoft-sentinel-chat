@@ -1,9 +1,11 @@
 import type { AIProvider, NormalizedMessage, NormalizedResponse, SessionStore } from "@gracesoft-sentinel/core";
 import type { Logger } from "@gracesoft-sentinel/logging";
-import { appendTurn, loadHistory, runAssistant, type QueryContext } from "@gracesoft-sentinel/agent-assistant";
+import { appendTurn, loadHistory, runAssistant, type QueryContext, type ToolDefinition } from "@gracesoft-sentinel/agent-assistant";
 
 export interface AssistantOnMessageDeps {
   ctx: QueryContext;
+  /** Structured query-layer tools (default) or `buildSearchTools(pineconeProvider)` in Pinecone-search mode — see composition.ts. */
+  tools?: ToolDefinition[];
   aiProvider: AIProvider;
   /** The switcher's own shared store — namespaced below by its own sessionId prefix, same as agent-concierge/agent-cook already do. */
   sessionStore: SessionStore;
@@ -33,6 +35,7 @@ export function createAssistantOnMessageHandler(deps: AssistantOnMessageDeps): (
       ctx: deps.ctx,
       question: text,
       history,
+      tools: deps.tools,
       config: { maxSteps: deps.maxSteps, timeoutMs: deps.timeoutMs, maxTokens: deps.maxTokens },
       onToolCall: (log) => deps.appLogger.info({ sessionId, tool: log.tool, arguments: log.arguments, latencyMs: log.latencyMs }, "assistant tool call"),
     });

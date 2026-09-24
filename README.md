@@ -15,7 +15,7 @@ apps/
   concierge-service/   Sentinel Concierge — HTTP service wiring agent-concierge to every provider
   cook-service/         Sentinel Cook — HTTP service wiring agent-cook to every provider
   demo-service/          Concierge + Cook + GraceSoft Assistant behind one agent-switcher, one chat window
-  assistant-service/     GraceSoft Assistant (Demo) — standalone HTTP API + minimal chat UI
+  assistant-service/     GraceSoft Assistant (Demo) — standalone HTTP service wiring agent-assistant to Telegram/WhatsApp
   legal-site/            Static privacy-policy / terms pages for both agents
 
 packages/
@@ -36,6 +36,7 @@ packages/
   provider-calendar-google/      CalendarProvider: Google Calendar
   provider-session-redis/        SessionStore: Redis
   provider-recipe-pinecone/      RecipeSourceProvider: personal recipe retrieval via RAG, queried from Pinecone
+  provider-snapshot-pinecone/    SnapshotSearchProvider: GraceSoft Assistant business-data search, queried from Pinecone
   provider-drive-google/         Drive I/O only — feeds provider-recipe-pinecone's Drive→Pinecone sync job
 
   logging/                       Structured logging (pino) + PII redaction
@@ -92,27 +93,33 @@ npx serve docs
 
 A third, separate demo product: an LLM chatbot that answers questions about a redacted snapshot of GraceSoft Desk (time/finance) and GraceSoft Skylight (kanban board) data — "What's overdue?", "How many billable hours did I log in August?", "How is Project 4 performing?" — never doing arithmetic itself, always grounding every number in a deterministic query function. Full spec, build history and current status: [`_internal-docs/08-assistant-milestone.md`](_internal-docs/08-assistant-milestone.md) / [`08-assistant-progress-log.md`](_internal-docs/08-assistant-progress-log.md) / [`08-assistant-test-checklist.md.md`](_internal-docs/08-assistant-test-checklist.md.md).
 
+No browser UI — like every other agent in this repo, the assistant is reachable only through channel packages (`channel-telegram`/`channel-whatsapp`), never a bespoke per-service UI.
+
 **Setup — standalone (`apps/assistant-service`):**
 ```bash
 cp apps/assistant-service/.env.example apps/assistant-service/.env
-# fill in OPENAI_API_KEY and DEMO_TOKEN
+# fill in OPENAI_API_KEY, and enable + configure at least one of WHATSAPP_ENABLED/TELEGRAM_ENABLED
 pnpm --filter @gracesoft-sentinel/agent-assistant run build
 pnpm --filter @gracesoft-sentinel/assistant-service run build
 pnpm --filter @gracesoft-sentinel/assistant-service run start
 ```
-Opens a chat UI at `http://localhost:3004` (the port in `.env.example`) — paste the `DEMO_TOKEN` once when prompted. No Redis or Postgres needed: sessions are in-memory, by design, for a single-process demo.
+Message the configured Telegram bot or WhatsApp number directly. No Redis or Postgres needed: sessions are in-memory, by design, for a single-process demo.
 
-**Setup — inside demo-service:** set `ASSISTANT_ENABLED=true` and `ASSISTANT_SNAPSHOT_DIR` in `apps/demo-service/.env` (see that file's own comments), then run demo-service as usual. Reachable via the `/assistant` trigger phrase in whichever channel demo-service is already wired to; `DEMO_DEFAULT_AGENT=assistant` makes it the default instead of Concierge.
+**Setup — inside demo-service:** set `ASSISTANT_ENABLED=true` and `ASSISTANT_SNAPSHOT_DIR` (or the Pinecone vars below) in `apps/demo-service/.env` (see that file's own comments), then run demo-service as usual. Reachable via the `/assistant` trigger phrase on whichever channel demo-service is already wired to; `DEMO_DEFAULT_AGENT=assistant` makes it the default instead of Concierge.
 
-**Config:** both versions are entirely env-driven — see each app's `.env.example` for the full list (model, as-of date, snapshot path, tool-loop limits, rate limits, the daily model-call cap). No config is hand-edited in code.
+**Two data modes, in both versions** — set exactly one:
+- **Structured** (default): a directory of snapshot JSON tables (`SNAPSHOT_DIR`/`ASSISTANT_SNAPSHOT_DIR`), queried deterministically — zero arithmetic drift, every number traceable to a query-layer function.
+- **Pinecone-search**: set `PINECONE_INDEX_NAME`/`ASSISTANT_PINECONE_INDEX_NAME` to swap in semantic search over an existing MySQL→Pinecone index instead (see `packages/ingest-mysql-pinecone`, which populates it; `packages/provider-snapshot-pinecone` queries it). Trades the structured mode's zero-drift guarantee for using real, already-indexed business data instead of the fixture.
 
-**Refreshing the snapshot:** point `SNAPSHOT_DIR`/`ASSISTANT_SNAPSHOT_DIR` at a new directory of the same 17 JSON tables (see `packages/agent-assistant/data/snapshot/valid/` for the exact shape each table must match, and `src/types/desk.ts`/`src/types/skylight.ts` for the schemas). `loadSnapshot` validates referential integrity and scans for unredacted emails/URLs/phone numbers/account numbers/file paths on every load — a bad or under-redacted snapshot fails loudly at boot, not silently at query time.
+**Config:** both versions are entirely env-driven — see each app's `.env.example` for the full list (model, as-of date, snapshot/Pinecone config, tool-loop limits, the daily model-call cap). No config is hand-edited in code.
+
+**Refreshing the snapshot (structured mode):** point `SNAPSHOT_DIR`/`ASSISTANT_SNAPSHOT_DIR` at a new directory of the same 17 JSON tables (see `packages/agent-assistant/data/snapshot/valid/` for the exact shape each table must match, and `src/types/desk.ts`/`src/types/skylight.ts` for the schemas). `loadSnapshot` validates referential integrity and scans for unredacted emails/URLs/phone numbers/account numbers/file paths on every load — a bad or under-redacted snapshot fails loudly at boot, not silently at query time.
 
 **Known limits:**
-- No real Desk/Skylight export has been ingested — every number in the current snapshot comes from a hand-built fixture (`packages/agent-assistant/data/snapshot/valid/`), not a live business.
-- SSE streaming (`POST /chat?stream=1`) is not token-level — `AIProvider` has no streaming capability anywhere in this repo, so it sends the finished answer as one event.
+- Structured mode's snapshot is still a hand-built fixture (`packages/agent-assistant/data/snapshot/valid/`), not a live business — Pinecone-search mode is the path to real data.
+- Pinecone-search mode is untested against a live index/credentials in this environment — only against an in-memory fake (`packages/provider-snapshot-pinecone`'s own tests).
 - No real spend/cost tracking — `AIProvider` exposes no token usage or pricing, so the "daily spend cap" is actually a daily call-count cap, and the eval suite reports latency, not cost.
-- The golden-set eval suite (`pnpm --filter @gracesoft-sentinel/assistant-service run eval`) and demo-service's `/assistant` CI wiring both need a real `OPENAI_API_KEY`, which hasn't been exercised in this environment — see the M6 entry in the progress log for exactly what is and isn't verified without one.
+- The golden-set eval suite (`pnpm --filter @gracesoft-sentinel/assistant-service run eval`, structured mode only) and demo-service's `/assistant` CI wiring both need a real `OPENAI_API_KEY`, which hasn't been exercised in this environment — see the M6 entry in the progress log for exactly what is and isn't verified without one.
 - Droplet deployment (systemd, HTTPS) is not done — needs real infrastructure this repo can't provide.
 
 ## Contracts and testing philosophy

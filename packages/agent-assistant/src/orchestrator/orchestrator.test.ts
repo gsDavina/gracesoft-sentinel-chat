@@ -1,7 +1,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import type { SearchSnapshotInput, SnapshotSearchMatch, SnapshotSearchProvider } from "@gracesoft-sentinel/core";
 import { loadSnapshot } from "../loader/snapshot-loader.js";
 import { VALID_SNAPSHOT_DIR } from "../loader/test-support.js";
 import type { QueryContext } from "../query/types.js";
+import { buildSearchTools } from "../tools/search-tools.js";
 import { runAssistant } from "./orchestrator.js";
 import { ScriptedAIProvider } from "./test-support.js";
 
@@ -94,5 +96,27 @@ describe("runAssistant", () => {
     const sentContents = provider.calls[0]?.messages.map((m) => m.content) ?? [];
     expect(sentContents).toContain("how many billable hours in August?");
     expect(sentContents).toContain("16 billable hours in August.");
+  });
+
+  it("runs in Pinecone-search mode when a search-tool catalog is injected, instead of the structured tools", async () => {
+    class FakeSearchProvider implements SnapshotSearchProvider {
+      async search(_input: SearchSnapshotInput): Promise<SnapshotSearchMatch[]> {
+        return [{ id: "desk-project:4", text: "Project 4: 27 hours logged, billable value $2,700, currently in Development.", score: 0.9 }];
+      }
+    }
+
+    const provider = new ScriptedAIProvider([
+      JSON.stringify({ action: "call_tool", tool: "search_snapshot", arguments: { query: "project 4 hours" } }),
+      JSON.stringify({ action: "final_answer", text: "Project 4 has 27 hours logged, currently in Development." }),
+    ]);
+
+    const result = await runAssistant({ aiProvider: provider, ctx, question: "how is project 4 doing?", tools: buildSearchTools(new FakeSearchProvider()) });
+
+    expect(result.answer).toBe("Project 4 has 27 hours logged, currently in Development.");
+    expect(result.toolCalls[0]?.tool).toBe("search_snapshot");
+    // The system prompt sent for this run should offer only the one search tool, not the 22 structured ones.
+    const systemPrompt = provider.calls[0]?.messages[0]?.content ?? "";
+    expect(systemPrompt).toContain("search_snapshot");
+    expect(systemPrompt).not.toContain("get_hours_for_period");
   });
 });

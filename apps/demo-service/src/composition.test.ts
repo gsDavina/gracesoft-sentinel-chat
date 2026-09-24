@@ -62,4 +62,16 @@ describe("buildComposition — demo-service", () => {
   it("throws (fails boot) when ASSISTANT_ENABLED=true but the snapshot directory is invalid", () => {
     expect(() => buildComposition({ ...env, ASSISTANT_ENABLED: true, ASSISTANT_SNAPSHOT_DIR: "./does-not-exist" })).toThrow();
   });
+
+  it("wires the Assistant in Pinecone-search mode without loading a snapshot when ASSISTANT_PINECONE_INDEX_NAME is set", () => {
+    const composition = buildComposition({
+      ...env,
+      ASSISTANT_ENABLED: true,
+      ASSISTANT_SNAPSHOT_DIR: undefined,
+      ASSISTANT_PINECONE_API_KEY: "pc-test",
+      ASSISTANT_PINECONE_INDEX_NAME: "desk-skylight",
+      ASSISTANT_PINECONE_NAMESPACE: "desk-skylight",
+    });
+    expect(composition.onMessage).toBeInstanceOf(Function);
+  });
 });

@@ -4,6 +4,7 @@ export * from "./channel-adapter.js";
 export * from "./ai-provider.js";
 export * from "./calendar-provider.js";
 export * from "./recipe-source-provider.js";
+export * from "./snapshot-search-provider.js";
 export * from "./conversation-state.js";
 export * from "./business-config.js";
 export * from "./session-store.js";

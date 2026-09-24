@@ -21,9 +21,11 @@ Snapshot: 10 Jul 2026 to 10 Sep 2026. As-of date: 10 Sep 2026 (Asia/Singapore).
 
 ## Running it
 
-- **Standalone** (`apps/assistant-service`): open the chat UI, click each starter-question chip in order (all 10 aren't shown as chips — the UI surfaces 8; #9/#10 can be typed).
-- **demo-service**: send `/assistant` to switch, then send each question as a plain message.
-- Both dry runs (M7's exit criterion) should be run once each before a live demo, end to end, with no errors.
+**No browser UI** — `apps/assistant-service` was rebuilt to mirror `apps/cook-service`/`apps/concierge-service` (see the "Pivot" progress-log entry): the assistant is reachable only through whichever channels are enabled, currently Telegram and WhatsApp. There are no starter-question chips to click; type or send each question as an ordinary message, in order.
+
+- **Standalone** (`apps/assistant-service`): message the configured Telegram bot or WhatsApp number directly, one question at a time, in order.
+- **demo-service**: send `/assistant` to switch, then send each question as a plain message on whichever channel demo-service has webhooks for.
+- Both dry runs (M7's exit criterion) should be run once each before a live demo, end to end, with no errors. **Not re-verified against this new shape yet** — the M7 entry's dry run was against the now-removed browser UI; a fresh dry run through Telegram/WhatsApp is still needed.
 
 ## If the model is down
 

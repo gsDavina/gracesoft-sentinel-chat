@@ -1,0 +1,33 @@
+{
+  "name": "@gracesoft-sentinel/provider-snapshot-pinecone",
+  "version": "0.1.0",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --emitDeclarationOnly false --noEmit",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@gracesoft-sentinel/core": "workspace:*",
+    "@gracesoft-sentinel/provider-recipe-pinecone": "workspace:*"
+  },
+  "devDependencies": {
+    "@gracesoft-sentinel/config-tsconfig": "workspace:*",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.4"
+  }
+}

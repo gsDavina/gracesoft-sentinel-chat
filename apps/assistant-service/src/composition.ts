@@ -1,47 +1,81 @@
 import { OpenAIProvider } from "@gracesoft-sentinel/provider-ai-openai";
-import type { AIProvider } from "@gracesoft-sentinel/core";
+import { createPineconeClient } from "@gracesoft-sentinel/provider-recipe-pinecone";
+import { PineconeSnapshotSearchProvider } from "@gracesoft-sentinel/provider-snapshot-pinecone";
+import type { AIProvider, NormalizedMessage, NormalizedResponse } from "@gracesoft-sentinel/core";
 import { createLogger, type Logger } from "@gracesoft-sentinel/logging";
-import { buildDemoFallbackAnswers, loadSnapshot, type QueryContext, type Snapshot } from "@gracesoft-sentinel/agent-assistant";
+import { buildDemoFallbackAnswers, buildSearchTools, createEmptyQueryContext, loadSnapshot, type FallbackAnswer, type QueryContext, type ToolDefinition } from "@gracesoft-sentinel/agent-assistant";
 import { InMemorySessionStore } from "./in-memory-session-store.js";
 import { DailyCallCap } from "./daily-call-cap.js";
-import { createChatHandler, createSessionResetHandler } from "./chat-handler.js";
+import { SessionRateLimiter } from "./session-rate-limiter.js";
+import { createOnMessageHandler } from "./on-message.js";
 import type { AssistantServiceEnv } from "./env.js";
 
 export interface Composition {
-  snapshot: Snapshot;
-  ctx: QueryContext;
-  aiProvider: AIProvider;
-  chatHandler: ReturnType<typeof createChatHandler>;
-  resetSession: ReturnType<typeof createSessionResetHandler>;
-  sessionStore: InMemorySessionStore;
+  onMessage: (message: NormalizedMessage) => Promise<NormalizedResponse>;
+  readinessCheck: () => Promise<boolean>;
   appLogger: Logger;
-  callCap: DailyCallCap;
+  /** Exposed only for index.ts's boot-time warm-up call — nothing else should reach past `onMessage`. */
+  aiProvider: AIProvider;
 }
 
-/** The composition root — loads the snapshot once at boot (fails fast on a bad snapshot, per M1) and wires every other piece purely from env. */
-export function buildComposition(env: AssistantServiceEnv): Composition {
-  const appLogger = createLogger("assistant-service");
+interface DataMode {
+  ctx: QueryContext;
+  tools: ToolDefinition[] | undefined;
+  fallbackAnswers: FallbackAnswer[];
+}
 
-  const loaded = loadSnapshot(env.SNAPSHOT_DIR, { asOfDate: env.AS_OF_DATE });
+/**
+ * Structured mode (default) loads a JSON snapshot and answers via the
+ * deterministic query-layer tools; Pinecone-search mode (set
+ * `PINECONE_INDEX_NAME`) swaps in `search_snapshot` over an existing
+ * MySQL→Pinecone index instead — env.ts's `superRefine` already guarantees
+ * exactly one of `SNAPSHOT_DIR`/`PINECONE_INDEX_NAME` is usable. The M7
+ * fallback-answer cache is structured-mode-only: it's built from the
+ * query layer, which Pinecone-search mode doesn't load at all.
+ */
+function buildDataMode(env: AssistantServiceEnv, aiProvider: AIProvider, appLogger: Logger): DataMode {
+  if (env.PINECONE_INDEX_NAME) {
+    const pineconeClient = createPineconeClient({ apiKey: env.PINECONE_API_KEY!, indexName: env.PINECONE_INDEX_NAME, namespace: env.PINECONE_NAMESPACE });
+    const searchProvider = new PineconeSnapshotSearchProvider({ client: pineconeClient, aiProvider });
+    appLogger.info({ index: env.PINECONE_INDEX_NAME, namespace: env.PINECONE_NAMESPACE }, "assistant running in Pinecone-search mode");
+    return { ctx: createEmptyQueryContext(env.AS_OF_DATE), tools: buildSearchTools(searchProvider), fallbackAnswers: [] };
+  }
+
+  const loaded = loadSnapshot(env.SNAPSHOT_DIR!, { asOfDate: env.AS_OF_DATE });
   appLogger.info({ recordCounts: loaded.summary.recordCounts, warnings: loaded.summary.warnings.length, asOfDate: loaded.summary.asOfDate }, "snapshot loaded");
   for (const warning of loaded.summary.warnings) appLogger.warn({ code: warning.code }, warning.message);
 
   const ctx: QueryContext = { desk: loaded.desk, skylight: loaded.skylight, crossTool: loaded.crossTool, asOfDate: env.AS_OF_DATE };
+  return { ctx, tools: undefined, fallbackAnswers: buildDemoFallbackAnswers(ctx) };
+}
+
+/** The composition root — resolves the data mode (fails fast on a bad snapshot or missing Pinecone config, per env.ts) and wires every channel purely from env. */
+export function buildComposition(env: AssistantServiceEnv): Composition {
+  const appLogger = createLogger("assistant-service");
   const aiProvider = new OpenAIProvider({ apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL });
+
+  const { ctx, tools, fallbackAnswers } = buildDataMode(env, aiProvider, appLogger);
+
   const sessionStore = new InMemorySessionStore();
   const callCap = new DailyCallCap(env.DAILY_MODEL_CALL_CAP);
+  const rateLimiter = new SessionRateLimiter(env.RATE_LIMIT_PER_CHATTER_PER_MINUTE);
 
-  const chatHandler = createChatHandler({
+  const onMessage = createOnMessageHandler({
     ctx,
+    tools,
     aiProvider,
     sessionStore,
     appLogger,
     callCap,
+    fallbackAnswers,
+    rateLimiter,
     maxSteps: env.MAX_TOOL_STEPS,
     timeoutMs: env.MODEL_TIMEOUT_MS,
     maxTokens: env.MAX_TOKENS_PER_REQUEST,
-    fallbackAnswers: buildDemoFallbackAnswers(ctx),
   });
 
-  return { snapshot: loaded, ctx, aiProvider, chatHandler, resetSession: createSessionResetHandler(sessionStore), sessionStore, appLogger, callCap };
+  // Everything above already ran to completion synchronously (or threw) by the time this returns — nothing external left to ping.
+  const readinessCheck = async (): Promise<boolean> => true;
+
+  return { onMessage, readinessCheck, appLogger, aiProvider };
 }

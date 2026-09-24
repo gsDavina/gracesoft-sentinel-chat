@@ -21,6 +21,7 @@
     { "path": "packages/channel-sms" },
     { "path": "packages/agent-switcher" },
     { "path": "packages/legal-demo" },
-    { "path": "packages/ingest-mysql-pinecone" }
+    { "path": "packages/ingest-mysql-pinecone" },
+    { "path": "packages/provider-snapshot-pinecone" }
   ]
 }

@@ -44,6 +44,12 @@ importers:
       '@gracesoft-sentinel/agent-assistant':
         specifier: workspace:*
         version: link:../../packages/agent-assistant
+      '@gracesoft-sentinel/channel-telegram':
+        specifier: workspace:*
+        version: link:../../packages/channel-telegram
+      '@gracesoft-sentinel/channel-whatsapp':
+        specifier: workspace:*
+        version: link:../../packages/channel-whatsapp
       '@gracesoft-sentinel/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -53,6 +59,12 @@ importers:
       '@gracesoft-sentinel/provider-ai-openai':
         specifier: workspace:*
         version: link:../../packages/provider-ai-openai
+      '@gracesoft-sentinel/provider-recipe-pinecone':
+        specifier: workspace:*
+        version: link:../../packages/provider-recipe-pinecone
+      '@gracesoft-sentinel/provider-snapshot-pinecone':
+        specifier: workspace:*
+        version: link:../../packages/provider-snapshot-pinecone
       express:
         specifier: ^4.19.2
         version: 4.22.2
@@ -63,9 +75,6 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
-      '@gracesoft-sentinel/config-eslint':
-        specifier: workspace:*
-        version: link:../../packages/config-eslint
       '@gracesoft-sentinel/config-tsconfig':
         specifier: workspace:*
         version: link:../../packages/config-tsconfig
@@ -224,6 +233,9 @@ importers:
       '@gracesoft-sentinel/provider-session-redis':
         specifier: workspace:*
         version: link:../../packages/provider-session-redis
+      '@gracesoft-sentinel/provider-snapshot-pinecone':
+        specifier: workspace:*
+        version: link:../../packages/provider-snapshot-pinecone
       express:
         specifier: ^4.19.2
         version: 4.22.2
@@ -655,6 +667,25 @@ importers:
       ioredis:
         specifier: ^5.4.1
         version: 5.11.1
+    devDependencies:
+      '@gracesoft-sentinel/config-tsconfig':
+        specifier: workspace:*
+        version: link:../config-tsconfig
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.4
+        version: 3.2.7(@types/node@18.19.130)
+
+  packages/provider-snapshot-pinecone:
+    dependencies:
+      '@gracesoft-sentinel/core':
+        specifier: workspace:*
+        version: link:../core
+      '@gracesoft-sentinel/provider-recipe-pinecone':
+        specifier: workspace:*
+        version: link:../provider-recipe-pinecone
     devDependencies:
       '@gracesoft-sentinel/config-tsconfig':
         specifier: workspace:*

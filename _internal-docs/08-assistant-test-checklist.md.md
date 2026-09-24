@@ -154,30 +154,32 @@ Run against a small hand-built fixture with hand-calculated answers.
 
 ## 5. Standalone service (M4)
 
-### API
-- [x] `GET /health` returns 200 once the snapshot is loaded, 503 before. (tested via injectable `isReady`; live-verified always-200 after a real boot)
-- [x] `GET /meta` returns the snapshot span, as-of date, record counts and model name.
-- [x] `POST /chat` returns the answer and metadata, and streams via SSE when requested — **not token-level streaming**, see the M4 deviation note in the milestone doc.
-- [x] `POST /chat` rejects missing or empty messages and oversized input with 400.
-- [x] `POST /sessions/:id/reset` clears the session.
+**Superseded** (see the milestone doc's M4 section and the "Pivot" progress-log entry): the browser UI and `POST /chat`/`GET /meta`/`POST /sessions/:id/reset` HTTP surface this section checks were built, verified as noted below, then removed — `assistant-service` now mirrors `cook-service`, reachable only via `channel-telegram`/`channel-whatsapp`. Checkmarks below record what was true of the now-deleted code at the time; the API/Access/UI sections no longer apply to the current service at all.
 
-### Access and limits
-- [x] Requests without the demo token get 401. (basic auth was not implemented — the milestone doc only ever offered "a demo token **or** basic auth", and a bearer token is what the UI implements)
-- [x] Per-IP and per-session rate limits return 429 with a readable message.
-- [x] The daily cap stops new model calls and shows a friendly message. *(a call-count cap, not real spend — `AIProvider` has no cost/usage data to cap against; see the milestone doc's note)*
-- [x] Invalid env config fails on boot with the key named.
+### API *(superseded — no longer exists)*
+- [x] ~~`GET /health` returns 200 once the snapshot is loaded, 503 before.~~ Now: `GET /health` always 200, `GET /ready` carries the gating, matching `cook-service`.
+- [x] ~~`GET /meta` returns the snapshot span, as-of date, record counts and model name.~~ Removed, no replacement — there's no client to serve this to.
+- [x] ~~`POST /chat` returns the answer and metadata, and streams via SSE when requested.~~ Removed — messages arrive only via the Telegram/WhatsApp webhooks.
+- [x] ~~`POST /chat` rejects missing or empty messages and oversized input with 400.~~ Removed; `on-message.ts` still has its own no-text-message handling.
+- [x] ~~`POST /sessions/:id/reset` clears the session.~~ Removed, no replacement.
 
-### UI
-- [ ] Starter questions send correctly and return answers. *(send correctly and return a response — verified live; a **correct answer** needs a real `OPENAI_API_KEY`, which this environment doesn't have)*
-- [x] The snapshot-scope banner and "Demo data" label are always visible. (live-verified in-browser, desktop and phone width)
-- [x] Streaming renders smoothly, and errors show inline without breaking the chat. (live-verified: a simulated model failure rendered inline and the chat stayed usable)
-- [x] Works on phone width without horizontal scrolling. (live-verified at 375px)
-- [x] Snapshot text is escaped — every message is rendered via `textContent`, never `innerHTML`, so nothing from a tool result (or the model) can execute as markup. *(Markdown rendering itself — tables, lists — was deliberately not built: adding a Markdown parser just to render model text is a real XSS surface for the exact snapshot-injection scenario this project guards against elsewhere; plain text with preserved line breaks was the safer trade-off for a demo.)*
+### Access and limits *(reshaped, not superseded)*
+- [x] ~~Requests without the demo token get 401.~~ Removed — no bearer token; access control is now each channel's own (Telegram secret token, WhatsApp signature verification), same as `cook-service`.
+- [x] Per-IP and per-chatter rate limits return 429/a friendly message. (`express-rate-limit` in front of the webhook routes; `SessionRateLimiter` repurposed from per-browser-session to per-chatter, applied inside `on-message.ts`)
+- [x] The daily cap stops new model calls and shows a friendly message. *(a call-count cap, not real spend — `AIProvider` has no cost/usage data to cap against; see the milestone doc's note. Unchanged by the UI removal.)*
+- [x] Invalid env config fails on boot with the key named. (reshaped `env.ts` — `WHATSAPP_ENABLED`/`TELEGRAM_ENABLED` and the Pinecone-mode branch instead of `DEMO_TOKEN`)
+
+### UI *(superseded — deleted entirely)*
+- [x] ~~Starter questions send correctly and return answers.~~ No starter questions or UI of any kind exist now.
+- [x] ~~The snapshot-scope banner and "Demo data" label are always visible.~~ Live-verified in-browser before removal (desktop and phone width) — see the M4 progress-log entry. No longer applicable.
+- [x] ~~Streaming renders smoothly, and errors show inline without breaking the chat.~~ Live-verified before removal. No longer applicable.
+- [x] ~~Works on phone width without horizontal scrolling.~~ Live-verified before removal. No longer applicable.
+- [x] ~~Snapshot text is escaped (`textContent`, never `innerHTML`).~~ No longer applicable — there's no rendering surface; each channel's own outbound formatting handles this now.
 
 ### Deployment
 - [ ] systemd service starts on boot and restarts on crash. *(needs an actual droplet — see the milestone doc)*
-- [ ] HTTPS works, and HTTP redirects to it. *(needs a domain + certificate — see the milestone doc)*
-- [ ] Restart reloads the snapshot and warms up before accepting traffic. *(reload-on-restart is inherent to the boot sequence and already true; a dedicated warm-up call is M7 scope, not yet built)*
+- [ ] HTTPS works, and HTTP redirects to it. *(matters less without a browser UI, but still needed for the webhook endpoints)*
+- [x] Restart reloads the snapshot (or Pinecone config) and warms up before accepting traffic. (reload-on-restart is inherent to the boot sequence; the M7 warm-up call carried over unchanged into `index.ts`)
 
 ---
 
@@ -241,9 +243,9 @@ Add further cases until the set reaches 40–60, keeping every category represen
 
 ## 8. Demo readiness (M7)
 
-- [x] Demo script runs end to end on the standalone version with no errors. (Dry run 1 — live in the browser pane, all 10 questions, no console errors; see the M7 progress log entry)
+- [ ] Demo script runs end to end on the standalone version with no errors. *(Dry run 1 was done — live in the browser, all 10 questions, no console errors — but against the browser UI that has since been removed; see the "Pivot" progress-log entry. Needs re-verification through Telegram/WhatsApp, which needs a real bot token/WhatsApp number this environment doesn't have.)*
 - [ ] Demo script runs end to end on the demo-service version with no errors. (Dry run 2) *(demo-service needs Redis + Postgres, neither available in this environment — covered instead by `switcher-integration.test.ts`, a meaningfully different kind of check)*
 - [ ] First question after a cold start answers within the latency target. *(warm-up itself runs and is verified — see the milestone doc — but "within the latency target" needs a live model to time)*
-- [x] With the model API blocked, scripted questions fall back to cached answers labelled as such. (live-verified: all 10 demo-script questions, live model deliberately broken, each correctly returned its labelled cached answer)
+- [x] With the model API blocked, scripted questions fall back to cached answers labelled as such. *(live-verified through the browser UI before its removal — see the M7 progress-log entry; the fallback mechanism itself (`on-message.ts`) is unchanged by the channel rewrite and still unit-tested)*
 - [x] Final redaction sweep across data, logs, UI copy and README finds nothing. (automated scanner on every snapshot load, plus a manual grep sweep of every M4–M7 file for email/phone/local-path patterns)
-- [x] README for both versions is accurate: setup, config, snapshot refresh, known limits. (root `README.md`'s new "GraceSoft Assistant (Demo)" section)
+- [ ] README for both versions is accurate: setup, config, snapshot refresh, known limits. *(updated for the Telegram/WhatsApp + Pinecone-search-mode shape as of the "Pivot" entry — re-check against a real deploy once one exists)*

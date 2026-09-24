@@ -1,122 +1,77 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import express, { type Express, type NextFunction, type Request, type Response } from "express";
+import express, { type Express } from "express";
 import { rateLimit } from "express-rate-limit";
+import { TelegramApiClient, TelegramChannelAdapter, createTelegramWebhookRouter } from "@gracesoft-sentinel/channel-telegram";
+import { WhatsAppApiClient, WhatsAppChannelAdapter, createWhatsAppWebhookRouter } from "@gracesoft-sentinel/channel-whatsapp";
+import type { NormalizedMessage, NormalizedResponse } from "@gracesoft-sentinel/core";
 import type { Logger } from "@gracesoft-sentinel/logging";
-import type { Snapshot } from "@gracesoft-sentinel/agent-assistant";
 import type { AssistantServiceEnv } from "./env.js";
-import type { createChatHandler, createSessionResetHandler } from "./chat-handler.js";
-import { SessionRateLimiter } from "./session-rate-limiter.js";
-
-// Works from both `src/server.ts` (tests) and the compiled `dist/server.js` — both sit one level under the package root, so `../public` reaches the same static folder either way.
-const PUBLIC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../public");
-const MAX_MESSAGE_LENGTH = 2000;
 
 export interface BuildServerParams {
   env: AssistantServiceEnv;
-  snapshot: Snapshot;
-  chatHandler: ReturnType<typeof createChatHandler>;
-  resetSession: ReturnType<typeof createSessionResetHandler>;
+  onMessage: (message: NormalizedMessage) => Promise<NormalizedResponse>;
+  readinessCheck: () => Promise<boolean>;
   appLogger: Logger;
-  /** Flips to true once the snapshot has loaded — /health is 503 before this, 200 after (this service's own convention; see the M4 progress note). */
-  isReady: () => boolean;
 }
 
-function requireDemoToken(env: AssistantServiceEnv) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const header = req.header("authorization");
-    const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : undefined;
-    if (token !== env.DEMO_TOKEN) {
-      res.status(401).json({ error: "Missing or invalid demo token" });
-      return;
-    }
-    next();
-  };
+/** IP-based floor against abuse, not per-chatter fairness — see on-message.ts's own SessionRateLimiter for that. Same convention as every other service's webhook router. */
+function webhookRateLimiter() {
+  return rateLimit({
+    windowMs: 60_000,
+    limit: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
 }
 
+/** Composes the deployable HTTP surface — no UI, no /chat/API endpoints: the assistant is reachable only through the channels mounted below (Telegram/WhatsApp today; more can be added the same way). */
 export function buildServer(params: BuildServerParams): Express {
   const { env, appLogger } = params;
   const app = express();
+  // Exactly one hop: the reverse proxy/tunnel this service always sits
+  // behind (ngrok locally, a load balancer in production) — not `true`,
+  // which would trust the entire client-supplied X-Forwarded-For chain
+  // and let a client spoof its own rate-limit identity.
   app.set("trust proxy", 1);
-  app.use(express.json({ limit: "16kb" }));
-  app.use(express.static(PUBLIC_DIR));
 
   app.get("/health", (_req, res) => {
-    res.status(params.isReady() ? 200 : 503).json({ status: params.isReady() ? "ok" : "loading" });
+    res.status(200).json({ status: "ok" });
   });
 
-  app.get("/meta", (_req, res) => {
-    res.json({
-      snapshotStart: params.snapshot.summary.snapshotStart,
-      snapshotEnd: params.snapshot.summary.snapshotEnd,
-      asOfDate: params.snapshot.summary.asOfDate,
-      recordCounts: params.snapshot.summary.recordCounts,
-      model: env.OPENAI_MODEL,
-    });
+  app.get("/ready", async (_req, res) => {
+    const ready = await params.readinessCheck().catch(() => false);
+    res.status(ready ? 200 : 503).json({ status: ready ? "ready" : "not ready" });
   });
 
-  const ipLimiter = rateLimit({ windowMs: 60_000, limit: env.RATE_LIMIT_PER_IP_PER_MINUTE, standardHeaders: true, legacyHeaders: false });
-  const sessionLimiter = new SessionRateLimiter(env.RATE_LIMIT_PER_SESSION_PER_MINUTE);
+  if (env.WHATSAPP_ENABLED) {
+    const apiClient = new WhatsAppApiClient({ accessToken: env.WHATSAPP_ACCESS_TOKEN!, phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID! });
+    const adapter = new WhatsAppChannelAdapter({ resolveMedia: (mediaId) => apiClient.downloadMediaAsDataUri(mediaId) });
+    app.use(
+      webhookRateLimiter(),
+      createWhatsAppWebhookRouter({
+        verifyToken: env.WHATSAPP_WEBHOOK_VERIFY_TOKEN!,
+        appSecret: env.WHATSAPP_APP_SECRET!,
+        adapter,
+        apiClient,
+        onMessage: params.onMessage,
+        onError: (err) => appLogger.error({ err }, "WhatsApp webhook processing failed"),
+      })
+    );
+  }
 
-  app.post("/chat", requireDemoToken(env), ipLimiter, async (req, res) => {
-    const { sessionId, message, channel, userId } = req.body as { sessionId?: unknown; message?: unknown; channel?: unknown; userId?: unknown };
-
-    if (typeof sessionId !== "string" || sessionId.trim().length === 0) {
-      res.status(400).json({ error: "sessionId is required" });
-      return;
-    }
-    if (typeof message !== "string" || message.trim().length === 0) {
-      res.status(400).json({ error: "message is required and must not be empty" });
-      return;
-    }
-    if (message.length > MAX_MESSAGE_LENGTH) {
-      res.status(400).json({ error: `message must be ${MAX_MESSAGE_LENGTH} characters or fewer` });
-      return;
-    }
-    if (!sessionLimiter.tryConsume(sessionId)) {
-      res.status(429).json({ error: "Too many requests for this session — please slow down and try again shortly." });
-      return;
-    }
-
-    try {
-      const result = await params.chatHandler({
-        sessionId,
-        message,
-        channel: typeof channel === "string" ? channel : "web",
-        userId: typeof userId === "string" ? userId : sessionId,
-      });
-
-      const wantsStream = req.query.stream === "1" || req.header("accept") === "text/event-stream";
-      if (wantsStream) {
-        // AIProvider has no token-streaming capability in this repo, so this
-        // isn't token-by-token — it's the whole finished answer sent as one
-        // SSE event, which still gives the standalone UI a streaming-shaped
-        // transport to render against (and to grow into real streaming later
-        // if AIProvider ever gains it).
-        res.setHeader("Content-Type", "text/event-stream");
-        res.setHeader("Cache-Control", "no-cache");
-        res.setHeader("Connection", "keep-alive");
-        res.write(`data: ${JSON.stringify(result)}\n\n`);
-        res.end();
-        return;
-      }
-
-      res.json(result);
-    } catch (err) {
-      appLogger.error({ err, sessionId }, "chat request failed unexpectedly");
-      res.status(500).json({ error: "Something went wrong answering that — please try again." });
-    }
-  });
-
-  app.post("/sessions/:id/reset", requireDemoToken(env), async (req, res) => {
-    const sessionId = req.params.id;
-    if (!sessionId) {
-      res.status(400).json({ error: "session id is required" });
-      return;
-    }
-    await params.resetSession(sessionId);
-    res.status(200).json({ status: "reset" });
-  });
+  if (env.TELEGRAM_ENABLED) {
+    const apiClient = new TelegramApiClient({ botToken: env.TELEGRAM_BOT_TOKEN! });
+    const adapter = new TelegramChannelAdapter({ resolveMedia: (fileId, mimeType) => apiClient.downloadFileAsDataUri(fileId, mimeType) });
+    app.use(
+      webhookRateLimiter(),
+      createTelegramWebhookRouter({
+        secretToken: env.TELEGRAM_WEBHOOK_SECRET!,
+        adapter,
+        apiClient,
+        onMessage: params.onMessage,
+        onError: (err) => appLogger.error({ err }, "Telegram webhook processing failed"),
+      })
+    );
+  }
 
   return app;
 }

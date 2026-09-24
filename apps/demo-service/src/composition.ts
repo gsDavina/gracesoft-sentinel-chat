@@ -1,12 +1,13 @@
 import { OpenAIProvider } from "@gracesoft-sentinel/provider-ai-openai";
 import { GoogleCalendarProvider, createGoogleCalendarClient } from "@gracesoft-sentinel/provider-calendar-google";
 import { PineconeRecipeProvider, createPineconeClient } from "@gracesoft-sentinel/provider-recipe-pinecone";
+import { PineconeSnapshotSearchProvider } from "@gracesoft-sentinel/provider-snapshot-pinecone";
 import { RedisRateLimiter, RedisSessionStore, createRedisClient } from "@gracesoft-sentinel/provider-session-redis";
 import { PostgresConversationLogger, createPgClient } from "@gracesoft-sentinel/logging-postgres";
 import { createLogger, type Logger } from "@gracesoft-sentinel/logging";
 import { createAgentSwitcher, type RegisteredAgent } from "@gracesoft-sentinel/agent-switcher";
 import type { AIProvider, NormalizedMessage, NormalizedResponse, RecipeSourceProvider, SessionStore } from "@gracesoft-sentinel/core";
-import { loadSnapshot, type QueryContext } from "@gracesoft-sentinel/agent-assistant";
+import { buildSearchTools, createEmptyQueryContext, loadSnapshot, type QueryContext, type ToolDefinition } from "@gracesoft-sentinel/agent-assistant";
 import { loadBusinessConfig, loadFaqBlueprint } from "./business-config-loader.js";
 import { createConciergeOnMessageHandler } from "./concierge-on-message.js";
 import { createCookOnMessageHandler } from "./cook-on-message.js";
@@ -52,13 +53,25 @@ function buildRecipeSourceProvider(env: DemoServiceEnv, aiProvider: AIProvider):
 function buildAssistantAgent(env: DemoServiceEnv, aiProvider: AIProvider, sessionStore: SessionStore, appLogger: Logger): RegisteredAgent | undefined {
   if (!env.ASSISTANT_ENABLED) return undefined;
 
-  const loaded = loadSnapshot(env.ASSISTANT_SNAPSHOT_DIR!, { asOfDate: env.ASSISTANT_AS_OF_DATE });
-  appLogger.info({ recordCounts: loaded.summary.recordCounts, warnings: loaded.summary.warnings.length }, "assistant snapshot loaded");
-  for (const warning of loaded.summary.warnings) appLogger.warn({ code: warning.code }, warning.message);
+  let ctx: QueryContext;
+  let tools: ToolDefinition[] | undefined;
 
-  const ctx: QueryContext = { desk: loaded.desk, skylight: loaded.skylight, crossTool: loaded.crossTool, asOfDate: env.ASSISTANT_AS_OF_DATE };
+  if (env.ASSISTANT_PINECONE_INDEX_NAME) {
+    const pineconeClient = createPineconeClient({ apiKey: env.ASSISTANT_PINECONE_API_KEY!, indexName: env.ASSISTANT_PINECONE_INDEX_NAME, namespace: env.ASSISTANT_PINECONE_NAMESPACE });
+    const searchProvider = new PineconeSnapshotSearchProvider({ client: pineconeClient, aiProvider });
+    appLogger.info({ index: env.ASSISTANT_PINECONE_INDEX_NAME, namespace: env.ASSISTANT_PINECONE_NAMESPACE }, "assistant running in Pinecone-search mode");
+    ctx = createEmptyQueryContext(env.ASSISTANT_AS_OF_DATE);
+    tools = buildSearchTools(searchProvider);
+  } else {
+    const loaded = loadSnapshot(env.ASSISTANT_SNAPSHOT_DIR!, { asOfDate: env.ASSISTANT_AS_OF_DATE });
+    appLogger.info({ recordCounts: loaded.summary.recordCounts, warnings: loaded.summary.warnings.length }, "assistant snapshot loaded");
+    for (const warning of loaded.summary.warnings) appLogger.warn({ code: warning.code }, warning.message);
+    ctx = { desk: loaded.desk, skylight: loaded.skylight, crossTool: loaded.crossTool, asOfDate: env.ASSISTANT_AS_OF_DATE };
+  }
+
   const onMessage = createAssistantOnMessageHandler({
     ctx,
+    tools,
     aiProvider,
     sessionStore,
     appLogger,

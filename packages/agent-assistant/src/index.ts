@@ -11,6 +11,7 @@ export * from "./query/finance.js";
 export * from "./query/skylight.js";
 export * from "./query/cross-tool.js";
 export * from "./tools/definitions.js";
+export * from "./tools/search-tools.js";
 export * from "./orchestrator/orchestrator.js";
 export * from "./orchestrator/system-prompt.js";
 export * from "./session/assistant-session.js";

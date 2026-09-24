@@ -106,4 +106,37 @@ describe("loadEnv", () => {
     } as unknown as NodeJS.ProcessEnv);
     expect(env.PINECONE_INDEX_NAME).toBe("recipes");
   });
+
+  it("throws when ASSISTANT_ENABLED is true but neither ASSISTANT_SNAPSHOT_DIR nor ASSISTANT_PINECONE_INDEX_NAME is set", () => {
+    expect(() =>
+      loadEnv({ ...BASE_ENV, TELEGRAM_ENABLED: "true", TELEGRAM_BOT_TOKEN: "t", TELEGRAM_WEBHOOK_SECRET: "s", ASSISTANT_ENABLED: "true" } as unknown as NodeJS.ProcessEnv)
+    ).toThrow(/ASSISTANT_SNAPSHOT_DIR/);
+  });
+
+  it("throws when ASSISTANT_PINECONE_INDEX_NAME is set but ASSISTANT_PINECONE_API_KEY is missing", () => {
+    expect(() =>
+      loadEnv({
+        ...BASE_ENV,
+        TELEGRAM_ENABLED: "true",
+        TELEGRAM_BOT_TOKEN: "t",
+        TELEGRAM_WEBHOOK_SECRET: "s",
+        ASSISTANT_ENABLED: "true",
+        ASSISTANT_PINECONE_INDEX_NAME: "desk-skylight",
+      } as unknown as NodeJS.ProcessEnv)
+    ).toThrow(/ASSISTANT_PINECONE_API_KEY is required/);
+  });
+
+  it("loads successfully with the Assistant in Pinecone-search mode, and no ASSISTANT_SNAPSHOT_DIR needed", () => {
+    const env = loadEnv({
+      ...BASE_ENV,
+      TELEGRAM_ENABLED: "true",
+      TELEGRAM_BOT_TOKEN: "t",
+      TELEGRAM_WEBHOOK_SECRET: "s",
+      ASSISTANT_ENABLED: "true",
+      ASSISTANT_PINECONE_INDEX_NAME: "desk-skylight",
+      ASSISTANT_PINECONE_API_KEY: "pc-test",
+    } as unknown as NodeJS.ProcessEnv);
+    expect(env.ASSISTANT_PINECONE_INDEX_NAME).toBe("desk-skylight");
+    expect(env.ASSISTANT_SNAPSHOT_DIR).toBeUndefined();
+  });
 });

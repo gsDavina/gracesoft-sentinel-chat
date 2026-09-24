@@ -11,6 +11,21 @@ export interface QueryContext {
 }
 
 /**
+ * A `QueryContext` with no rows in it — for Pinecone-search mode, where
+ * `runAssistant`'s `tools` are `buildSearchTools(provider)` and never touch
+ * `ctx` at all, but the parameter is still required. Real callers should
+ * never read data out of this; it exists purely to satisfy the type.
+ */
+export function createEmptyQueryContext(asOfDate: string): QueryContext {
+  return {
+    desk: { projects: [], timeEntries: [], accounts: [], paymentMethods: [], categories: [], vendors: [], services: [], transactions: [], documents: [] },
+    skylight: { boards: [], columns: [], cards: [], checklists: [], checklistItems: [], comments: [], notes: [], activityLog: [] },
+    crossTool: { projectByPseudonym: new Map(), boardByPseudonym: new Map() },
+    asOfDate,
+  };
+}
+
+/**
  * Every query function returns this envelope, never a bare value — M2's
  * exit criteria and the M3 system prompt both depend on every answer
  * carrying its source tool, the date range actually used, and any

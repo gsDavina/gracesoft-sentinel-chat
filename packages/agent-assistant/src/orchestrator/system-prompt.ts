@@ -1,5 +1,6 @@
 import { SNAPSHOT_END_DATE, SNAPSHOT_START_DATE } from "../types/snapshot.js";
 import { TOOLS } from "../tools/definitions.js";
+import type { ToolDefinition } from "../tools/tool-definition.js";
 
 /**
  * Same convention as `agent-cook`'s `faq-matcher.ts` `PROMPT_INJECTION_GUARD`
@@ -28,8 +29,8 @@ const ANSWER_FORMAT = [
   "If a tool result's dateRange.clipped or dateRange.partial is true, or it has any caveats, state that plainly in the answer — don't drop it.",
 ];
 
-function toolCatalogText(): string {
-  return TOOLS.map((t) => `- ${t.name}(${t.argsShape}): ${t.description}`).join("\n");
+function toolCatalogText(tools: ToolDefinition[]): string {
+  return tools.map((t) => `- ${t.name}(${t.argsShape}): ${t.description}`).join("\n");
 }
 
 const PROTOCOL = [
@@ -39,14 +40,26 @@ const PROTOCOL = [
   'Call as many tools as you need, one at a time, before giving a final_answer. Never fabricate a tool result yourself — always call the tool and wait for its real result.',
 ];
 
-export function buildSystemPrompt(): string {
+/**
+ * `tools` defaults to the structured query-layer catalog (`TOOLS`) but is
+ * swappable — pass the single `search_snapshot` tool from
+ * `buildSearchTools()` to run the assistant in Pinecone-search mode
+ * instead, over the exact same rules/guardrails. The "Period" argument
+ * shape block is only relevant to the structured tools, so it's included
+ * only when at least one offered tool actually references it.
+ */
+export function buildSystemPrompt(tools: ToolDefinition[] = TOOLS): string {
+  const usesPeriodShape = tools.some((t) => t.argsShape.includes("Period"));
+
   return [
     "You are the GraceSoft Assistant, answering questions about a redacted snapshot of GraceSoft Desk (time/finance) and GraceSoft Skylight (kanban board) data. You answer only from tool results — you have no other knowledge of this data.",
     `Rules:\n- ${CORE_RULES.join("\n- ")}`,
     PROMPT_INJECTION_GUARD,
     `Answer format:\n- ${ANSWER_FORMAT.join("\n- ")}`,
-    `Tools available:\n${toolCatalogText()}`,
-    `Period argument shape — a "Period" is one of:\n  {"kind":"keyword","keyword":"today"|"this_week"|"this_month"|"last_month"|"last_30_days"|"q3"}\n  {"kind":"month","month":"<month name>"}\n  {"kind":"explicit","start":"<ISO date>","end":"<ISO date>"}`,
+    `Tools available:\n${toolCatalogText(tools)}`,
+    ...(usesPeriodShape
+      ? [`Period argument shape — a "Period" is one of:\n  {"kind":"keyword","keyword":"today"|"this_week"|"this_month"|"last_month"|"last_30_days"|"q3"}\n  {"kind":"month","month":"<month name>"}\n  {"kind":"explicit","start":"<ISO date>","end":"<ISO date>"}`]
+      : []),
     PROTOCOL.join("\n"),
   ].join("\n\n");
 }
