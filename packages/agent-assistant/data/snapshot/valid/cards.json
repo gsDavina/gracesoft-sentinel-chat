@@ -1,0 +1,17 @@
+[
+  { "id": "card-b1-1", "boardId": "board-1", "columnId": "col-b1-inprogress", "title": "Card 1", "labels": [], "tags": [] },
+  { "id": "card-b1-2", "boardId": "board-1", "columnId": "col-b1-done", "title": "Card 2", "dueDate": "2026-08-25", "labels": [], "tags": [] },
+
+  { "id": "card-b2-1", "boardId": "board-2", "columnId": "col-b2-todo", "title": "Card 3", "dueDate": "2026-09-10", "labels": [], "tags": [] },
+  { "id": "card-b2-2", "boardId": "board-2", "columnId": "col-b2-inprogress", "title": "Card 4", "labels": [], "tags": [] },
+
+  { "id": "card-b3-1", "boardId": "board-3", "columnId": "col-b3-todo", "title": "Card 5", "dueDate": "2026-09-01", "labels": [], "tags": [] },
+  { "id": "card-b3-2", "boardId": "board-3", "columnId": "col-b3-done", "title": "Card 6", "labels": [], "tags": [] },
+
+  { "id": "card-b4-1", "boardId": "board-4", "columnId": "col-b4-inprogress", "title": "Card 7", "dueDate": "2026-09-05", "labels": ["priority"], "tags": [] },
+  { "id": "card-b4-2", "boardId": "board-4", "columnId": "col-b4-done", "title": "Card 8", "labels": [], "tags": [] },
+  { "id": "card-b4-3", "boardId": "board-4", "columnId": "col-b4-inprogress", "title": "Card 9", "labels": [], "tags": [] },
+  { "id": "card-b4-4", "boardId": "board-4", "columnId": "col-b4-todo", "title": "Card 10", "labels": [], "tags": [], "deletedAt": "2026-08-05T09:00:00Z" },
+
+  { "id": "card-b6-1", "boardId": "board-6", "columnId": "col-b6-done", "title": "Card 11", "labels": [], "tags": [] }
+]

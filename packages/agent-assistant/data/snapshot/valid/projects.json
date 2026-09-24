@@ -1,0 +1,7 @@
+[
+  { "id": "project-1", "pseudonym": "Project 1", "status": "active", "hourlyRateCents": 8000, "currency": "SGD", "startDate": "2026-07-01" },
+  { "id": "project-2", "pseudonym": "Project 2", "status": "active", "hourlyRateCents": 6000, "currency": "SGD", "startDate": "2026-07-15" },
+  { "id": "project-3", "pseudonym": "Project 3", "status": "active", "hourlyRateCents": 7000, "currency": "SGD", "startDate": "2026-07-10" },
+  { "id": "project-4", "pseudonym": "Project 4", "status": "active", "hourlyRateCents": 10000, "currency": "SGD", "startDate": "2026-07-05" },
+  { "id": "project-5", "pseudonym": "Project 5", "status": "on_hold", "hourlyRateCents": 5000, "currency": "SGD", "startDate": "2026-06-01" }
+]

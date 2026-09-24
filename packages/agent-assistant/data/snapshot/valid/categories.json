@@ -1,0 +1,6 @@
+[
+  { "id": "category-income", "name": "Client Income" },
+  { "id": "category-saas", "name": "Software & SaaS" },
+  { "id": "category-hardware", "name": "Hardware" },
+  { "id": "category-travel", "name": "Travel" }
+]

@@ -1,0 +1,7 @@
+[
+  { "id": "ci-1", "checklistId": "checklist-1", "text": "Item 1", "done": true },
+  { "id": "ci-2", "checklistId": "checklist-1", "text": "Item 2", "done": true },
+  { "id": "ci-3", "checklistId": "checklist-1", "text": "Item 3", "done": true },
+  { "id": "ci-4", "checklistId": "checklist-1", "text": "Item 4", "done": false },
+  { "id": "ci-5", "checklistId": "checklist-1", "text": "Item 5", "done": false }
+]

@@ -1,0 +1,4 @@
+[
+  { "id": "account-1", "pseudonym": "Account 1", "currency": "SGD", "openingBalanceCents": 500000, "openingDate": "2026-07-10" },
+  { "id": "account-2", "pseudonym": "Account 2", "currency": "SGD", "openingBalanceCents": 100000, "openingDate": "2026-07-10" }
+]

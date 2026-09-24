@@ -9,30 +9,30 @@ Snapshot: 10 Jul 2026 to 10 Sep 2026. As-of date: 10 Sep 2026 (Asia/Singapore), 
 ## 1. Snapshot ingestion (M1)
 
 ### Loading
-- [ ] Full snapshot loads without errors, and the boot summary shows record counts for every entity.
-- [ ] Missing file fails fast with a clear message naming the file.
-- [ ] Malformed row (wrong type, missing required field) fails with the table name and row identifier.
-- [ ] Empty table loads as empty, not as an error, and is reported in the summary.
+- [x] Full snapshot loads without errors, and the boot summary shows record counts for every entity.
+- [x] Missing file fails fast with a clear message naming the file.
+- [x] Malformed row (wrong type, missing required field) fails with the table name and row identifier.
+- [x] Empty table loads as empty, not as an error, and is reported in the summary.
 
 ### Integrity
-- [ ] Time entry pointing to a missing project fails validation.
-- [ ] Time entry with an unknown stage fails validation.
-- [ ] Transaction pointing to a missing account, method, category or vendor fails validation.
-- [ ] Card pointing to a missing column, or column to a missing board, fails validation.
-- [ ] Checklist item pointing to a missing checklist fails validation.
-- [ ] Skylight boards with no matching Desk project (and the reverse) are logged as warnings, not errors.
+- [x] Time entry pointing to a missing project fails validation.
+- [x] Time entry with an unknown stage fails validation.
+- [x] Transaction pointing to a missing account, method, category or vendor fails validation.
+- [x] Card pointing to a missing column, or column to a missing board, fails validation.
+- [x] Checklist item pointing to a missing checklist fails validation.
+- [x] Skylight boards with no matching Desk project (and the reverse) are logged as warnings, not errors.
 
 ### Dates and units
-- [ ] Records dated outside 10 Jul to 10 Sep 2026 are flagged.
-- [ ] Money is stored as integer cents with no floating-point drift (sum of 1,000 small amounts matches exactly).
-- [ ] Durations are stored in minutes and convert to hours correctly (for example 90 min = 1.5 h).
-- [ ] Day boundaries use SGT: an entry at 23:30 SGT on 31 Aug counts in August, not September.
+- [x] Records dated outside 10 Jul to 10 Sep 2026 are flagged.
+- [x] Money is stored as integer cents with no floating-point drift (sum of 1,000 small amounts matches exactly).
+- [x] Durations are stored in minutes and convert to hours correctly (for example 90 min = 1.5 h).
+- [x] Day boundaries use SGT: an entry at 23:30 SGT on 31 Aug counts in August, not September.
 
 ### Redaction scan
-- [ ] Load fails if a real-looking email appears in any field, including notes and comments.
-- [ ] Load fails if a URL, phone number, bank or account number, or file path appears.
-- [ ] `[email]`, `[url]` and `[phone]` placeholders pass the scan.
-- [ ] Pseudonyms ("User 1", "Project 4", "Vendor 7", "Account 2", "Payment Method 3") pass the scan.
+- [x] Load fails if a real-looking email appears in any field, including notes and comments.
+- [x] Load fails if a URL, phone number, bank or account number, or file path appears.
+- [x] `[email]`, `[url]` and `[phone]` placeholders pass the scan.
+- [x] Pseudonyms ("User 1", "Project 4", "Vendor 7", "Account 2", "Payment Method 3") pass the scan.
 
 ---
 
@@ -41,54 +41,54 @@ Snapshot: 10 Jul 2026 to 10 Sep 2026. As-of date: 10 Sep 2026 (Asia/Singapore), 
 Run against a small hand-built fixture with hand-calculated answers.
 
 ### Period resolver
-- [ ] "August" resolves to 1–31 Aug 2026.
-- [ ] "Last month" resolves to 1–31 Aug 2026 (as-of 10 Sep).
-- [ ] "This month" resolves to 1–10 Sep 2026 and is flagged as partial.
-- [ ] "Last 30 days" resolves to 12 Aug to 10 Sep 2026.
-- [ ] "July" resolves to 10–31 Jul 2026 and is flagged as clipped (snapshot starts 10 Jul).
-- [ ] "June" and "October" resolve to "outside snapshot", not an empty range.
-- [ ] "Q3" is clipped to 10 Jul to 10 Sep and flagged.
-- [ ] Explicit ranges ("15 Jul to 20 Aug") pass through unchanged.
-- [ ] Changing the as-of date in config changes relative periods accordingly.
+- [x] "August" resolves to 1–31 Aug 2026.
+- [x] "Last month" resolves to 1–31 Aug 2026 (as-of 10 Sep).
+- [x] "This month" resolves to 1–10 Sep 2026 and is flagged as partial.
+- [x] "Last 30 days" resolves to 12 Aug to 10 Sep 2026.
+- [x] "July" resolves to 10–31 Jul 2026 and is flagged as clipped (snapshot starts 10 Jul).
+- [x] "June" and "October" resolve to "outside snapshot", not an empty range.
+- [x] "Q3" is clipped to 10 Jul to 10 Sep and flagged.
+- [x] Explicit ranges ("15 Jul to 20 Aug") pass through unchanged.
+- [x] Changing the as-of date in config changes relative periods accordingly.
 
 ### Desk: time and projects
-- [ ] Total, billable and non-billable hours for a period match the fixture.
-- [ ] Billable value = billable hours × that project's hourly rate, summed per project.
-- [ ] Non-billable hours never add to billable value.
-- [ ] Hours and billable value by stage add up to the project total.
-- [ ] Stage breakdown returns stages in SDLC order (Discovery to Maintenance).
-- [ ] Current-stage rule returns the expected stage, including a project that has gone back from Testing to Development.
-- [ ] A project in Maintenance that logged Development time reports both correctly.
-- [ ] Commit-derived entries are only found from 1 Aug 2026 onward.
-- [ ] Project with no time entries in the period returns zero hours with a "no entries" note, not an error.
+- [x] Total, billable and non-billable hours for a period match the fixture.
+- [x] Billable value = billable hours × that project's hourly rate, summed per project.
+- [x] Non-billable hours never add to billable value.
+- [x] Hours and billable value by stage add up to the project total.
+- [x] Stage breakdown returns stages in SDLC order (Discovery to Maintenance).
+- [x] Current-stage rule returns the expected stage, including a project that has gone back from Testing to Development.
+- [x] A project in Maintenance that logged Development time reports both correctly.
+- [x] Commit-derived entries are only found from 1 Aug 2026 onward.
+- [x] Project with no time entries in the period returns zero hours with a "no entries" note, not an error.
 
 ### Desk: finance
-- [ ] Income, expenses and net for a period match the fixture.
-- [ ] Breakdown by category, vendor, account and payment method each add up to the total.
-- [ ] Account balance as of a date = opening balance + movements up to that date.
-- [ ] Pending and outstanding items are listed correctly.
-- [ ] SaaS spend for a month counts only the Software & SaaS category.
-- [ ] Monthly summary matches the separately computed finance and project figures for that month.
-- [ ] Billable value and income are always returned as separate fields, never combined.
+- [x] Income, expenses and net for a period match the fixture.
+- [x] Breakdown by category, vendor, account and payment method each add up to the total.
+- [x] Account balance as of a date = opening balance + movements up to that date.
+- [x] Pending and outstanding items are listed correctly.
+- [x] SaaS spend for a month counts only the Software & SaaS category.
+- [x] Monthly summary matches the separately computed finance and project figures for that month.
+- [x] Billable value and income are always returned as separate fields, never combined.
 
 ### Skylight
-- [ ] Overdue = due date before the as-of date and the card isn't in a Done column.
-- [ ] A card due on the as-of date counts as "due today", not overdue.
-- [ ] A Done card with a past due date is not overdue.
-- [ ] Cards with no due date are never overdue.
-- [ ] Checklist progress matches ticked items ("3 of 5"), and the remaining items are listed by name.
-- [ ] "Completed in August" uses activity-log moves into Done within August.
-- [ ] A card moved into Done and then back out is not counted as completed.
-- [ ] Deleted cards don't appear in current-state queries but do appear in activity history.
-- [ ] Board and card search is case-insensitive and supports partial matches.
+- [x] Overdue = due date before the as-of date and the card isn't in a Done column.
+- [x] A card due on the as-of date counts as "due today", not overdue.
+- [x] A Done card with a past due date is not overdue.
+- [x] Cards with no due date are never overdue.
+- [x] Checklist progress matches ticked items ("3 of 5"), and the remaining items are listed by name.
+- [x] "Completed in August" uses activity-log moves into Done within August.
+- [x] A card moved into Done and then back out is not counted as completed.
+- [x] Deleted cards don't appear in current-state queries but do appear in activity history.
+- [x] Board and card search is case-insensitive and supports partial matches.
 
 ### Cross-tool
-- [ ] Project health for "Project 4" joins Desk "Project 4" with Skylight board "Project 4".
-- [ ] A board with no matching Desk project returns Skylight data only, with a caveat.
-- [ ] Cross-tool time answers carry the "no automatic sync, correlation only" caveat.
+- [x] Project health for "Project 4" joins Desk "Project 4" with Skylight board "Project 4".
+- [x] A board with no matching Desk project returns Skylight data only, with a caveat.
+- [x] Cross-tool time answers carry the "no automatic sync, correlation only" caveat.
 
 ### Result metadata
-- [ ] Every result includes its source tool, the date range actually used and any caveats.
+- [x] Every result includes its source tool, the date range actually used and any caveats.
 
 ---
 

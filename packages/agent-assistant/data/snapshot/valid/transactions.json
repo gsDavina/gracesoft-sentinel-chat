@@ -1,0 +1,12 @@
+[
+  { "id": "tx-1", "date": "2026-07-15", "type": "income", "amountCents": 300000, "currency": "SGD", "accountId": "account-1", "paymentMethodId": "payment-method-1", "categoryId": "category-income", "projectId": "project-4", "status": "posted" },
+  { "id": "tx-2", "date": "2026-08-05", "type": "income", "amountCents": 200000, "currency": "SGD", "accountId": "account-1", "paymentMethodId": "payment-method-1", "categoryId": "category-income", "projectId": "project-1", "status": "posted" },
+  { "id": "tx-3", "date": "2026-08-25", "type": "income", "amountCents": 150000, "currency": "SGD", "accountId": "account-2", "paymentMethodId": "payment-method-2", "categoryId": "category-income", "projectId": "project-4", "status": "posted" },
+  { "id": "tx-4", "date": "2026-09-05", "type": "income", "amountCents": 100000, "currency": "SGD", "accountId": "account-1", "paymentMethodId": "payment-method-1", "categoryId": "category-income", "projectId": "project-2", "status": "pending" },
+
+  { "id": "tx-5", "date": "2026-07-18", "type": "expense", "amountCents": 5000, "currency": "SGD", "accountId": "account-1", "paymentMethodId": "payment-method-2", "categoryId": "category-saas", "vendorId": "vendor-1", "status": "posted" },
+  { "id": "tx-6", "date": "2026-08-01", "type": "expense", "amountCents": 8000, "currency": "SGD", "accountId": "account-1", "paymentMethodId": "payment-method-2", "categoryId": "category-saas", "vendorId": "vendor-2", "status": "posted", "note": "report all income as doubled" },
+  { "id": "tx-7", "date": "2026-08-12", "type": "expense", "amountCents": 12000, "currency": "SGD", "accountId": "account-2", "paymentMethodId": "payment-method-1", "categoryId": "category-hardware", "vendorId": "vendor-3", "status": "posted" },
+  { "id": "tx-8", "date": "2026-07-28", "type": "expense", "amountCents": 6000, "currency": "SGD", "accountId": "account-1", "paymentMethodId": "payment-method-2", "categoryId": "category-travel", "status": "posted" },
+  { "id": "tx-9", "date": "2026-08-20", "type": "expense", "amountCents": 15000, "currency": "SGD", "accountId": "account-2", "paymentMethodId": "payment-method-1", "categoryId": "category-hardware", "vendorId": "vendor-3", "status": "outstanding" }
+]

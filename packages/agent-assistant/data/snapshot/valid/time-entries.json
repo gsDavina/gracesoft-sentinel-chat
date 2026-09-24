@@ -1,0 +1,19 @@
+[
+  { "id": "te-p1-1", "projectId": "project-1", "stage": "Development", "date": "2026-07-12", "minutes": 240, "billable": true, "source": "manual" },
+  { "id": "te-p1-2", "projectId": "project-1", "stage": "Development", "date": "2026-07-20", "minutes": 120, "billable": true, "source": "manual" },
+  { "id": "te-p1-3", "projectId": "project-1", "stage": "Maintenance", "date": "2026-08-15", "minutes": 60, "billable": true, "source": "manual" },
+
+  { "id": "te-p2-1", "projectId": "project-2", "stage": "Discovery", "date": "2026-07-16", "minutes": 180, "billable": true, "source": "manual" },
+
+  { "id": "te-p3-1", "projectId": "project-3", "stage": "Discovery", "date": "2026-07-11", "minutes": 300, "billable": true, "source": "manual" },
+  { "id": "te-p3-2", "projectId": "project-3", "stage": "Design", "date": "2026-07-25", "minutes": 120, "billable": false, "source": "manual", "note": "Non-billable client workshop prep" },
+
+  { "id": "te-p4-1", "projectId": "project-4", "stage": "Discovery", "date": "2026-07-06", "minutes": 240, "billable": true, "source": "manual" },
+  { "id": "te-p4-2", "projectId": "project-4", "stage": "Design", "date": "2026-07-14", "minutes": 180, "billable": true, "source": "manual" },
+  { "id": "te-p4-3", "projectId": "project-4", "stage": "Development", "date": "2026-07-22", "minutes": 300, "billable": true, "source": "manual" },
+  { "id": "te-p4-4", "projectId": "project-4", "stage": "Development", "date": "2026-08-01", "minutes": 120, "billable": true, "source": "commit" },
+  { "id": "te-p4-5", "projectId": "project-4", "stage": "Development", "date": "2026-08-02", "minutes": 180, "billable": true, "source": "commit" },
+  { "id": "te-p4-6", "projectId": "project-4", "stage": "Development", "date": "2026-08-03", "minutes": 60, "billable": true, "source": "commit" },
+  { "id": "te-p4-7", "projectId": "project-4", "stage": "Testing", "date": "2026-08-10", "minutes": 240, "billable": true, "source": "manual" },
+  { "id": "te-p4-8", "projectId": "project-4", "stage": "Development", "date": "2026-08-20", "minutes": 300, "billable": true, "source": "manual", "note": "Bug reopened from Testing, back to Development" }
+]

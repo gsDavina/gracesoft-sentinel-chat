@@ -1,0 +1,21 @@
+[
+  { "id": "col-b1-todo", "boardId": "board-1", "name": "To Do", "isDoneColumn": false, "order": 1 },
+  { "id": "col-b1-inprogress", "boardId": "board-1", "name": "In Progress", "isDoneColumn": false, "order": 2 },
+  { "id": "col-b1-done", "boardId": "board-1", "name": "Done", "isDoneColumn": true, "order": 3 },
+
+  { "id": "col-b2-todo", "boardId": "board-2", "name": "To Do", "isDoneColumn": false, "order": 1 },
+  { "id": "col-b2-inprogress", "boardId": "board-2", "name": "In Progress", "isDoneColumn": false, "order": 2 },
+  { "id": "col-b2-done", "boardId": "board-2", "name": "Done", "isDoneColumn": true, "order": 3 },
+
+  { "id": "col-b3-todo", "boardId": "board-3", "name": "To Do", "isDoneColumn": false, "order": 1 },
+  { "id": "col-b3-inprogress", "boardId": "board-3", "name": "In Progress", "isDoneColumn": false, "order": 2 },
+  { "id": "col-b3-done", "boardId": "board-3", "name": "Done", "isDoneColumn": true, "order": 3 },
+
+  { "id": "col-b4-todo", "boardId": "board-4", "name": "To Do", "isDoneColumn": false, "order": 1 },
+  { "id": "col-b4-inprogress", "boardId": "board-4", "name": "In Progress", "isDoneColumn": false, "order": 2 },
+  { "id": "col-b4-done", "boardId": "board-4", "name": "Done", "isDoneColumn": true, "order": 3 },
+
+  { "id": "col-b6-todo", "boardId": "board-6", "name": "To Do", "isDoneColumn": false, "order": 1 },
+  { "id": "col-b6-inprogress", "boardId": "board-6", "name": "In Progress", "isDoneColumn": false, "order": 2 },
+  { "id": "col-b6-done", "boardId": "board-6", "name": "Done", "isDoneColumn": true, "order": 3 }
+]

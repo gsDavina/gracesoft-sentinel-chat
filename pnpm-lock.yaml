@@ -238,6 +238,25 @@ importers:
         specifier: ^3.0.4
         version: 3.2.7(@types/node@18.19.130)
 
+  packages/agent-assistant:
+    dependencies:
+      '@gracesoft-sentinel/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@gracesoft-sentinel/config-tsconfig':
+        specifier: workspace:*
+        version: link:../config-tsconfig
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.4
+        version: 3.2.7(@types/node@18.19.130)
+
   packages/agent-concierge:
     dependencies:
       '@gracesoft-sentinel/core':
