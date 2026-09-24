@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { loadSnapshot, type QueryContext } from "@gracesoft-sentinel/agent-assistant";
+import type { AIProvider } from "@gracesoft-sentinel/core";
+import { buildDemoFallbackAnswers, loadSnapshot, type QueryContext } from "@gracesoft-sentinel/agent-assistant";
 import { createChatHandler } from "./chat-handler.js";
 import { InMemorySessionStore } from "./in-memory-session-store.js";
 import { DailyCallCap } from "./daily-call-cap.js";
@@ -12,20 +13,36 @@ beforeAll(() => {
   ctx = { desk: snapshot.desk, skylight: snapshot.skylight, crossTool: snapshot.crossTool, asOfDate: "2026-09-10" };
 });
 
-function buildHandler(overrides: Partial<{ callCap: DailyCallCap; sessionStore: InMemorySessionStore }> = {}) {
+function buildHandler(overrides: Partial<{ callCap: DailyCallCap; sessionStore: InMemorySessionStore; aiProvider: AIProvider }> = {}) {
   const sessionStore = overrides.sessionStore ?? new InMemorySessionStore();
   const callCap = overrides.callCap ?? new DailyCallCap(100);
   const handler = createChatHandler({
     ctx,
-    aiProvider: new FakeAiProvider("The answer is 16 billable hours."),
+    aiProvider: overrides.aiProvider ?? new FakeAiProvider("The answer is 16 billable hours."),
     sessionStore,
     appLogger: createSilentTestLogger(),
     callCap,
     maxSteps: 6,
     timeoutMs: 5000,
     maxTokens: 512,
+    fallbackAnswers: buildDemoFallbackAnswers(ctx),
   });
   return { handler, sessionStore, callCap };
+}
+
+class AlwaysFailingAiProvider implements AIProvider {
+  async chatComplete(): Promise<never> {
+    throw new Error("model unavailable");
+  }
+  async visionAnalyze(): Promise<never> {
+    throw new Error("not implemented");
+  }
+  async embed(): Promise<never> {
+    throw new Error("not implemented");
+  }
+  async transcribeAudio(): Promise<never> {
+    throw new Error("not implemented");
+  }
 }
 
 describe("chat handler", () => {
@@ -48,4 +65,18 @@ describe("chat handler", () => {
     expect(result.capped).toBe(true);
     expect(result.answer).toMatch(/usage limit/);
   });
+
+  it("serves the cached demo-script fallback answer when the live model fails on a scripted question", async () => {
+    const { handler } = buildHandler({ aiProvider: new AlwaysFailingAiProvider() });
+    const result = await handler({ sessionId: "s1", message: "What's overdue?", channel: "web", userId: "u1" });
+    expect(result.answer).toContain("cached demo answer");
+    expect(result.answer).toContain("Card 5");
+  }, 10000);
+
+  it("still returns the ordinary graceful-failure message when the live model fails on a non-scripted question", async () => {
+    const { handler } = buildHandler({ aiProvider: new AlwaysFailingAiProvider() });
+    const result = await handler({ sessionId: "s1", message: "What's the meaning of life?", channel: "web", userId: "u1" });
+    expect(result.answer).not.toContain("cached demo answer");
+    expect(result.answer).toMatch(/trouble reaching/);
+  }, 10000);
 });

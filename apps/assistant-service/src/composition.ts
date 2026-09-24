@@ -1,6 +1,7 @@
 import { OpenAIProvider } from "@gracesoft-sentinel/provider-ai-openai";
+import type { AIProvider } from "@gracesoft-sentinel/core";
 import { createLogger, type Logger } from "@gracesoft-sentinel/logging";
-import { loadSnapshot, type QueryContext, type Snapshot } from "@gracesoft-sentinel/agent-assistant";
+import { buildDemoFallbackAnswers, loadSnapshot, type QueryContext, type Snapshot } from "@gracesoft-sentinel/agent-assistant";
 import { InMemorySessionStore } from "./in-memory-session-store.js";
 import { DailyCallCap } from "./daily-call-cap.js";
 import { createChatHandler, createSessionResetHandler } from "./chat-handler.js";
@@ -9,6 +10,7 @@ import type { AssistantServiceEnv } from "./env.js";
 export interface Composition {
   snapshot: Snapshot;
   ctx: QueryContext;
+  aiProvider: AIProvider;
   chatHandler: ReturnType<typeof createChatHandler>;
   resetSession: ReturnType<typeof createSessionResetHandler>;
   sessionStore: InMemorySessionStore;
@@ -38,7 +40,8 @@ export function buildComposition(env: AssistantServiceEnv): Composition {
     maxSteps: env.MAX_TOOL_STEPS,
     timeoutMs: env.MODEL_TIMEOUT_MS,
     maxTokens: env.MAX_TOKENS_PER_REQUEST,
+    fallbackAnswers: buildDemoFallbackAnswers(ctx),
   });
 
-  return { snapshot: loaded, ctx, chatHandler, resetSession: createSessionResetHandler(sessionStore), sessionStore, appLogger, callCap };
+  return { snapshot: loaded, ctx, aiProvider, chatHandler, resetSession: createSessionResetHandler(sessionStore), sessionStore, appLogger, callCap };
 }

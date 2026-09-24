@@ -165,13 +165,13 @@ gracesoft-assistant/
 
 **Goal:** a smooth live demo.
 
-- [ ] Demo script: 8–10 questions that show off each capability, in a good order.
-- [ ] Warm-up on start (snapshot loaded, a model call made) so the first question isn't slow.
-- [ ] Fallback plan if the model API is down: cached answers for the scripted questions, clearly labelled.
-- [ ] README for both versions: setup, config, how to refresh the snapshot, known limits.
-- [ ] Final check that nothing unredacted is present in the data, logs, UI or README.
+- [x] Demo script: 8–10 questions that show off each capability, in a good order. — [`08-assistant-demo-script.md`](08-assistant-demo-script.md), 10 questions, deliberately ending on the two guardrail questions rather than a number.
+- [x] Warm-up on start (snapshot loaded, a model call made) so the first question isn't slow. — `apps/assistant-service/src/index.ts`'s `warmUp()`: fires a throwaway `chatComplete` right after boot, never blocks `app.listen`, logs success/failure. Live-verified with a deliberately-invalid API key: failed cleanly, logged a clear warning, server still started and served traffic.
+- [x] Fallback plan if the model API is down: cached answers for the scripted questions, clearly labelled. — `packages/agent-assistant/src/fallback/demo-fallback.ts`, wired into `chat-handler.ts`: on a graceful failure, a matching demo-script question gets its pre-computed answer (from the query layer, not hand-typed) instead of the generic "I'm having trouble" message, always suffixed `[cached demo answer — the live model is unavailable right now]`. Live-verified: all 10 demo-script questions, asked in order against a deliberately-invalid API key, each correctly returned its labelled cached answer.
+- [x] README for both versions: setup, config, how to refresh the snapshot, known limits. — new "GraceSoft Assistant (Demo)" section in the root [`README.md`](../README.md) (no per-app README convention exists elsewhere in this repo, so this follows the root README's existing per-product-section pattern rather than inventing a new one).
+- [x] Final check that nothing unredacted is present in the data, logs, UI or README. — the automated redaction scanner already gates every snapshot load (M1); additionally grepped every new M4–M7 file (fixture data, UI, docs, `.env.example`s) for email/phone/absolute-local-path patterns by hand — nothing found.
 
-**Exit criteria:** two full dry runs of the demo script through both versions with no errors.
+**Exit criteria:** two full dry runs of the demo script through both versions with no errors. **One full live dry run done** — all 10 demo-script questions run in order through the standalone service's real chat UI in the browser pane (with a deliberately-invalid API key, so this exercised the fallback-cache path specifically), no errors, no console errors, all 10 cached answers matched the hand-verified fixture values exactly. **Not done: a second dry run, and any dry run through demo-service** — demo-service needs Redis and Postgres, neither of which exist in this environment; its `/assistant` path is instead covered by `switcher-integration.test.ts` (real switcher, real `createAssistantOnMessageHandler`, real fixture snapshot, only the model faked), which is a meaningfully different kind of verification than an actual browser dry run. One incidental finding during the browser dry run, noted for whoever runs the next one: this session's browser-automation tool's synthetic Return/Enter keypress did not trigger the chat form's submit — clicking the Send button worked every time. Standard HTML forms submit on Enter by default and nothing in `app.js` overrides that, so this reads as an automation-tool quirk, not an app bug, but it's worth a two-second check in an actual browser before a live demo.
 
 ---
 

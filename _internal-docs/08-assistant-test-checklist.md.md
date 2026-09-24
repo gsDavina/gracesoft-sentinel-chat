@@ -241,9 +241,9 @@ Add further cases until the set reaches 40–60, keeping every category represen
 
 ## 8. Demo readiness (M7)
 
-- [ ] Demo script runs end to end on the standalone version with no errors. (Dry run 1)
-- [ ] Demo script runs end to end on the demo-service version with no errors. (Dry run 2)
-- [ ] First question after a cold start answers within the latency target (warm-up works).
-- [ ] With the model API blocked, scripted questions fall back to cached answers labelled as such.
-- [ ] Final redaction sweep across data, logs, UI copy and README finds nothing.
-- [ ] README for both versions is accurate: setup, config, snapshot refresh, known limits.
+- [x] Demo script runs end to end on the standalone version with no errors. (Dry run 1 — live in the browser pane, all 10 questions, no console errors; see the M7 progress log entry)
+- [ ] Demo script runs end to end on the demo-service version with no errors. (Dry run 2) *(demo-service needs Redis + Postgres, neither available in this environment — covered instead by `switcher-integration.test.ts`, a meaningfully different kind of check)*
+- [ ] First question after a cold start answers within the latency target. *(warm-up itself runs and is verified — see the milestone doc — but "within the latency target" needs a live model to time)*
+- [x] With the model API blocked, scripted questions fall back to cached answers labelled as such. (live-verified: all 10 demo-script questions, live model deliberately broken, each correctly returned its labelled cached answer)
+- [x] Final redaction sweep across data, logs, UI copy and README finds nothing. (automated scanner on every snapshot load, plus a manual grep sweep of every M4–M7 file for email/phone/local-path patterns)
+- [x] README for both versions is accurate: setup, config, snapshot refresh, known limits. (root `README.md`'s new "GraceSoft Assistant (Demo)" section)

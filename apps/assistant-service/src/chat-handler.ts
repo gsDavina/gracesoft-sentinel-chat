@@ -1,6 +1,6 @@
 import type { AIProvider, SessionStore } from "@gracesoft-sentinel/core";
 import type { Logger } from "@gracesoft-sentinel/logging";
-import { appendTurn, loadHistory, resetSession, runAssistant, type OrchestratorResult, type QueryContext } from "@gracesoft-sentinel/agent-assistant";
+import { appendTurn, findFallbackAnswer, loadHistory, resetSession, runAssistant, type FallbackAnswer, type OrchestratorResult, type QueryContext } from "@gracesoft-sentinel/agent-assistant";
 import type { DailyCallCap } from "./daily-call-cap.js";
 
 export interface ChatHandlerDeps {
@@ -12,6 +12,8 @@ export interface ChatHandlerDeps {
   maxSteps: number;
   timeoutMs: number;
   maxTokens: number;
+  /** M7's fallback plan: pre-computed answers for the demo script's own questions, used only when the live model call fails outright. */
+  fallbackAnswers: FallbackAnswer[];
 }
 
 export interface ChatRequest {
@@ -47,14 +49,24 @@ export function createChatHandler(deps: ChatHandlerDeps) {
     });
 
     deps.callCap.recordCall();
-    await appendTurn(deps.sessionStore, req.sessionId, { channel: req.channel, userId: req.userId }, req.message, result.answer);
+
+    let finalResult = result;
+    if (result.gracefulFailure) {
+      const fallback = findFallbackAnswer(deps.fallbackAnswers, req.message);
+      if (fallback) {
+        deps.appLogger.warn({ sessionId: req.sessionId, question: req.message }, "live model failed — serving a cached demo-script fallback answer");
+        finalResult = { ...result, answer: fallback };
+      }
+    }
+
+    await appendTurn(deps.sessionStore, req.sessionId, { channel: req.channel, userId: req.userId }, req.message, finalResult.answer);
 
     deps.appLogger.info(
-      { sessionId: req.sessionId, question: req.message, steps: result.steps, toolCallCount: result.toolCalls.length, gracefulFailure: result.gracefulFailure, latencyMs: Date.now() - startedAt },
+      { sessionId: req.sessionId, question: req.message, steps: finalResult.steps, toolCallCount: finalResult.toolCalls.length, gracefulFailure: finalResult.gracefulFailure, latencyMs: Date.now() - startedAt },
       "assistant chat request completed"
     );
 
-    return { ...result, capped: false };
+    return { ...finalResult, capped: false };
   };
 }
 

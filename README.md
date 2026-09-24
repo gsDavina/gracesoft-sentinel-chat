@@ -14,6 +14,8 @@ All 11 planned milestones are complete. See [`_internal-docs/01-milestone-checkl
 apps/
   concierge-service/   Sentinel Concierge — HTTP service wiring agent-concierge to every provider
   cook-service/         Sentinel Cook — HTTP service wiring agent-cook to every provider
+  demo-service/          Concierge + Cook + GraceSoft Assistant behind one agent-switcher, one chat window
+  assistant-service/     GraceSoft Assistant (Demo) — standalone HTTP API + minimal chat UI
   legal-site/            Static privacy-policy / terms pages for both agents
 
 packages/
@@ -21,6 +23,9 @@ packages/
                                   CalendarProvider, SessionStore, BusinessConfig, RecipeSourceProvider, ...
   agent-concierge/               FAQ + booking agent logic — channel/provider-agnostic
   agent-cook/                    Recipe agent logic — channel/provider-agnostic
+  agent-assistant/                GraceSoft Assistant (Demo) core — snapshot loader, deterministic query
+                                  layer, tool-use loop over AIProvider, golden-set eval suite
+  agent-switcher/                 Wraps N independently-composed agents behind one onMessage, for demo-service
 
   channel-whatsapp/              ChannelAdapter: WhatsApp Cloud API
   channel-telegram/              ChannelAdapter: Telegram Bot API
@@ -82,6 +87,33 @@ docker compose up --build
 ```bash
 npx serve docs
 ```
+
+## GraceSoft Assistant (Demo)
+
+A third, separate demo product: an LLM chatbot that answers questions about a redacted snapshot of GraceSoft Desk (time/finance) and GraceSoft Skylight (kanban board) data — "What's overdue?", "How many billable hours did I log in August?", "How is Project 4 performing?" — never doing arithmetic itself, always grounding every number in a deterministic query function. Full spec, build history and current status: [`_internal-docs/08-assistant-milestone.md`](_internal-docs/08-assistant-milestone.md) / [`08-assistant-progress-log.md`](_internal-docs/08-assistant-progress-log.md) / [`08-assistant-test-checklist.md.md`](_internal-docs/08-assistant-test-checklist.md.md).
+
+**Setup — standalone (`apps/assistant-service`):**
+```bash
+cp apps/assistant-service/.env.example apps/assistant-service/.env
+# fill in OPENAI_API_KEY and DEMO_TOKEN
+pnpm --filter @gracesoft-sentinel/agent-assistant run build
+pnpm --filter @gracesoft-sentinel/assistant-service run build
+pnpm --filter @gracesoft-sentinel/assistant-service run start
+```
+Opens a chat UI at `http://localhost:3004` (the port in `.env.example`) — paste the `DEMO_TOKEN` once when prompted. No Redis or Postgres needed: sessions are in-memory, by design, for a single-process demo.
+
+**Setup — inside demo-service:** set `ASSISTANT_ENABLED=true` and `ASSISTANT_SNAPSHOT_DIR` in `apps/demo-service/.env` (see that file's own comments), then run demo-service as usual. Reachable via the `/assistant` trigger phrase in whichever channel demo-service is already wired to; `DEMO_DEFAULT_AGENT=assistant` makes it the default instead of Concierge.
+
+**Config:** both versions are entirely env-driven — see each app's `.env.example` for the full list (model, as-of date, snapshot path, tool-loop limits, rate limits, the daily model-call cap). No config is hand-edited in code.
+
+**Refreshing the snapshot:** point `SNAPSHOT_DIR`/`ASSISTANT_SNAPSHOT_DIR` at a new directory of the same 17 JSON tables (see `packages/agent-assistant/data/snapshot/valid/` for the exact shape each table must match, and `src/types/desk.ts`/`src/types/skylight.ts` for the schemas). `loadSnapshot` validates referential integrity and scans for unredacted emails/URLs/phone numbers/account numbers/file paths on every load — a bad or under-redacted snapshot fails loudly at boot, not silently at query time.
+
+**Known limits:**
+- No real Desk/Skylight export has been ingested — every number in the current snapshot comes from a hand-built fixture (`packages/agent-assistant/data/snapshot/valid/`), not a live business.
+- SSE streaming (`POST /chat?stream=1`) is not token-level — `AIProvider` has no streaming capability anywhere in this repo, so it sends the finished answer as one event.
+- No real spend/cost tracking — `AIProvider` exposes no token usage or pricing, so the "daily spend cap" is actually a daily call-count cap, and the eval suite reports latency, not cost.
+- The golden-set eval suite (`pnpm --filter @gracesoft-sentinel/assistant-service run eval`) and demo-service's `/assistant` CI wiring both need a real `OPENAI_API_KEY`, which hasn't been exercised in this environment — see the M6 entry in the progress log for exactly what is and isn't verified without one.
+- Droplet deployment (systemd, HTTPS) is not done — needs real infrastructure this repo can't provide.
 
 ## Contracts and testing philosophy
 

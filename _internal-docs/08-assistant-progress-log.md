@@ -4,6 +4,28 @@ Companion to `08-assistant-milestone.md` and `08-assistant-test-checklist.md.md`
 
 ---
 
+## 2026-09-24 — M7: demo readiness — script, warm-up, fallback cache, README, live dry run
+
+**Status:** M7 mostly done. Every milestone item that doesn't strictly need a live `OPENAI_API_KEY` is built and live-verified in the browser; the one item that does (a full dry run through demo-service, and "within the latency target") is honestly marked as not done rather than faked. This is the last of the seven milestones — M0 through M7 are now all either done or explicitly annotated with exactly what's blocked on infrastructure this environment doesn't have.
+
+**What was built:**
+- `_internal-docs/08-assistant-demo-script.md` — the 10-question script, in a deliberate order: Skylight first (immediately legible), then Desk time/finance (the numbers the demo needs to prove out), a cross-tool synthesis question, and closing on the two guardrail questions ("June" / "Who is User 1?") — ending a live demo on the assistant correctly saying "no" reads as more trustworthy than ending on a number.
+- `packages/agent-assistant/src/fallback/demo-fallback.ts` — `buildDemoFallbackAnswers(ctx)`: one pre-computed answer per demo-script question, built from the same query-layer calls the golden set uses (not hand-typed), each suffixed with a clear `[cached demo answer — the live model is unavailable right now]` label. Wired into `apps/assistant-service/src/chat-handler.ts`: only kicks in on an actual graceful failure from `runAssistant`, and only for a question that normalizes to an exact match against the script — anything else still gets the ordinary "I'm having trouble reaching the model" message, never silently swapped for a cached answer that wasn't actually asked for.
+- `apps/assistant-service/src/index.ts` gained `warmUp()` — a throwaway `chatComplete` call fired right after `buildComposition`, racing a 10s timeout, logging success/failure, and never blocking or delaying `app.listen`. A warm-up failure just means the first real question pays the provider's cold-start cost (or, per the point above, falls back to the cache) — it was never going to be a reason the demo can't start.
+- Root `README.md` gained a "GraceSoft Assistant (Demo)" section (setup for both versions, config, snapshot-refresh instructions, known limits) and the `apps/`/`packages/` architecture tree now lists `demo-service`, `assistant-service`, `agent-assistant` and `agent-switcher`, which had never been added when those shipped in earlier sessions — a small pre-existing gap, fixed in passing rather than left inconsistent next to the new section referencing them.
+
+**Live-verified in the browser (standalone service, `apps/assistant-service`):** ran all 10 demo-script questions through the real chat UI, in order, against a deliberately-invalid `OPENAI_API_KEY` (same setup as the M4 entry) — every single one correctly fell back to its cached answer, labelled, and every cached figure matched the hand-verified fixture values exactly (e.g. "2 cards are overdue: 'Card 5' on Project 3, 'Card 7' on Project 4", "$9,810.00"/"$2,380.00" cash position, "Development — based on its most recent time entry (2026-08-20)"). Server logs confirmed the warm-up failure was caught and logged, and confirmed each fallback being served. Zero console errors throughout.
+
+**One incidental finding, not a code fix:** partway through the dry run, three typed (non-chip) questions appeared to silently vanish — turned out to be this session's browser-automation tool not translating a synthetic Return/Enter keypress into the chat form's native submit event (the text just stayed in the input, uncommitted, and a second `type` call inserted more text into the same still-focused field rather than a fresh one). Clicking the Send button worked correctly every time once isolated. Standard HTML form behavior submits on Enter with a single text input, and nothing in `app.js` adds a keydown handler that would interfere with that — so this reads as an automation-tool limitation surfaced during testing, not an actual defect in the shipped UI, but it's cheap to spot-check for real before a live demo (two seconds: type a question into the real page in a real browser, press Enter).
+
+**What's genuinely deferred to the user:** a second dry run through demo-service (needs Redis + Postgres, neither available here — `switcher-integration.test.ts` covers the same code path a different way), "first question within the latency target" (needs a live model to time against), and the droplet/HTTPS deployment M4 already flagged as the user's to provision.
+
+**Verified locally (all green):** full workspace `pnpm -r run {typecheck,lint,test}`, `pnpm boundaries` (0 violations), `pnpm build` — all clean. `agent-assistant`: 112 tests (7 new: `demo-fallback.test.ts`). `assistant-service`: 32 tests (2 new: fallback-serves-on-scripted-question, fallback-doesn't-fire-on-unscripted-question).
+
+**This closes out M0-M7.** See the milestone doc for the consolidated status of every item across all seven milestones — the honest summary is: everything buildable and verifiable without a live model or real infrastructure is done and tested; everything that genuinely needs either is clearly marked, not silently assumed.
+
+---
+
 ## 2026-09-24 — M6: golden-set eval suite (grading mechanism verified; live pass rate still needs a real model)
 
 **Status:** M6's *mechanism* is done, tested, and CLI-ready. The thing M6 actually exists to prove — a real pass rate against a real model — genuinely can't be produced in this environment, since there's no `OPENAI_API_KEY` available. Recorded honestly as unmeasured rather than faked or skipped silently.

@@ -51,6 +51,7 @@ async function listen(envOverrides: Partial<AssistantServiceEnv> = {}, isReady =
     maxSteps: env.MAX_TOOL_STEPS,
     timeoutMs: env.MODEL_TIMEOUT_MS,
     maxTokens: env.MAX_TOKENS_PER_REQUEST,
+    fallbackAnswers: [],
   });
   const app = buildServer({ env, snapshot, chatHandler, resetSession: (id) => sessionStore.delete(id), appLogger: createSilentTestLogger(), isReady });
   server = createServer(app);
